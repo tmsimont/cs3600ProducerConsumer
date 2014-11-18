@@ -14,7 +14,9 @@ int server_listen(void) {
     struct sockaddr_in serv_addr;
 
     char sendBuff[1025];  
+    char recvBuff[1025];
     int numrv;  
+    int recvSize;
 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
     if (listenfd > -1) {
@@ -41,6 +43,14 @@ int server_listen(void) {
 
     while(1) {
         connfd = accept(listenfd, (struct sockaddr*)NULL ,NULL); // accept awaiting request
+
+        memset(recvBuff, '\0', sizeof(recvBuff));
+        recvSize = read(connfd, recvBuff, 1024);
+        if (recvSize < 0) {
+            printf("ERROR reading from socket");
+            return -1;
+        }
+        printf("Here is the message: %s\n",recvBuff);
 
         strcpy(sendBuff, "Message from server\n");
         write(connfd, sendBuff, strlen(sendBuff));
