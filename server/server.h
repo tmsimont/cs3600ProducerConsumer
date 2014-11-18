@@ -11,3 +11,5 @@ typedef struct _Resource Resource;
 
 Producer *producers[5];
 Resource *buffer[5];
+
+int server_listen(void);

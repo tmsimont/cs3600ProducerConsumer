@@ -11,7 +11,7 @@
 #include "server.h"
 
 /*
- * 
+ * Initialize program and begin listening for client requests 
  */
 int main(int argc, char** argv) {
     int numProducers = 5;
@@ -25,6 +25,8 @@ int main(int argc, char** argv) {
     for (i = 0; i < numProducers; i++) {
         producer_produce(producers[i]);
     }
+
+    server_listen();
 
 
     return (EXIT_SUCCESS);

@@ -8,3 +8,5 @@
 !*.h
 !*.ui
 !*.glade
+vs/*
+vs
