@@ -19,6 +19,6 @@ Producer *producer_new() {
     return p;
 }
 
-void producer_produce(Producer *p) {
+int producer_produce(Producer *p) {
     printf("produce\n");
 }

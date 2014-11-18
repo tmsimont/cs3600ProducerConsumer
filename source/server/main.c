@@ -24,6 +24,7 @@ int initialize_producers(void) {
     }
     return 0;
 }
+
 int execute_producers(void) {
     return 0;
 }

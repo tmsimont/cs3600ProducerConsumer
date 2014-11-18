@@ -9,6 +9,10 @@
 typedef struct _Producer Producer;
 Producer *producers[5];
 Producer *producer_new(void);
+int producer_produce(Producer);
+int producer_sleep(Producer);
+int initialize_producers(void);
+int execute_producers(void);
 
 // Resource
 typedef struct _Resource Resource;
@@ -17,8 +21,6 @@ typedef struct _Resource Resource;
 typedef struct _ResourceBuffer ResourceBuffer;
 
 // Primary server function
-int initialize_producers(void);
-int execute_producers(void);
 int report_status(void);
 int server_listen(void);
 int server_close_connection(void);

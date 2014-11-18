@@ -13,7 +13,6 @@ struct _Resource {
     int status;
 };
 
-
 Resource *resource_new() {
     Resource *r = malloc(sizeof(*r));
     return r;
