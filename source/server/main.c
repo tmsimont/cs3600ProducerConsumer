@@ -10,10 +10,7 @@
 #include <pthread.h>
 #include "server.h"
 
-/*
- * Initialize program and begin listening for client requests 
- */
-int main(int argc, char** argv) {
+int initialize_producers(void) {
     int numProducers = 5;
 
     int i;
@@ -25,10 +22,21 @@ int main(int argc, char** argv) {
     for (i = 0; i < numProducers; i++) {
         producer_produce(producers[i]);
     }
+    return 0;
+}
+int execute_producers(void) {
+    return 0;
+}
+int report_status(void) {
+    return 0;
+}
 
+/*
+ * Initialize program and begin listening for client requests 
+ */
+int main(int argc, char** argv) {
+    initialize_producers();
     server_listen();
-
-
     return (EXIT_SUCCESS);
 }
 

@@ -1,3 +1,7 @@
+/**
+ * 
+ */
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -6,8 +10,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/types.h>
- 
+#include <sys/types.h> 
+#include "server.h"
+
 int server_listen(void) {
     int listenfd = 0,connfd = 0;
 
@@ -20,7 +25,7 @@ int server_listen(void) {
 
     listenfd = socket(AF_INET, SOCK_STREAM, 0);
     if (listenfd > -1) {
-        printf("socket retrieve success\n");
+        printf("socket retrieve success!\n");
     }
     else {
         return -1;
@@ -63,3 +68,8 @@ int server_listen(void) {
 
     return 0;
 }
+
+int server_close_connection(void) {
+    return 0;
+}
+
