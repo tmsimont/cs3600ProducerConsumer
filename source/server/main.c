@@ -18,7 +18,6 @@ int initialize_producers(void) {
         producers[i] = producer_new();
     }
 
-
     for (i = 0; i < numProducers; i++) {
         producer_produce(producers[i]);
     }

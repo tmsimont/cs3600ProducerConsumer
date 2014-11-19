@@ -9,8 +9,8 @@
 typedef struct _Producer Producer;
 Producer *producers[5];
 Producer *producer_new(void);
-int producer_produce(Producer);
-int producer_sleep(Producer);
+int producer_produce(Producer*);
+int producer_sleep(Producer*);
 int initialize_producers(void);
 int execute_producers(void);
 
