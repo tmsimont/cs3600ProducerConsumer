@@ -90,15 +90,9 @@ int consumer_connect() {
 	return 0;
 }
 
-int consumer_connection_message() {
-	int iResult;
-	char *sendbuf = "this is a test";
-
-	int recvbuflen = DEFAULT_BUFLEN;
-	char recvbuf[DEFAULT_BUFLEN];
-
-	// Send an initial buffer
-	iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
+int consumer_connection_send_string(char *sendbuf) {
+	printf("Sending...\n");
+	int iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
 	if (iResult == SOCKET_ERROR) {
 		printf("send failed: %d\n", WSAGetLastError());
 		closesocket(ConnectSocket);
@@ -108,25 +102,33 @@ int consumer_connection_message() {
 	else {
 		printf("send ok\n");
 	}
-
 	printf("Bytes Sent: %ld\n", iResult);
+}
 
+int consumer_connection_message() {
+	int iResult;
 
-	// Receive data until the server closes the connection
-	do {
-		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-		if (iResult > 0) {
-			printf("Bytes received: %d\n", iResult);
-			recvbuf[iResult] = '\0';
-			printf("recvbuf: %s", recvbuf);
-		}
-		else if (iResult == 0) {
-			printf("Connection closed\n");
-		}
-		else {
-			printf("recv failed: %d\n", WSAGetLastError());
-		}
-	} while (iResult > 0);
+	int recvbuflen = DEFAULT_BUFLEN;
+	char recvbuf[DEFAULT_BUFLEN];
+
+	char *sendbuf = "client message";
+	consumer_connection_send_string(sendbuf);
+
+	printf("Receiving...\n");
+	// Receive a message
+	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+	if (iResult > 0) {
+		printf("Bytes received: %d\n", iResult);
+		recvbuf[iResult] = '\0';
+		printf("recvbuf: %s", recvbuf);
+		consumer_connection_message();
+	}
+	else if (iResult == 0) {
+		printf("Connection closed\n");
+	}
+	else {
+		printf("recv failed: %d\n", WSAGetLastError());
+	}
 	
 	return 0;
 }

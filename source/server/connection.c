@@ -20,6 +20,12 @@
 
 //the thread function
 void *connection_handler(void *);
+void connection_recurse(int);
+
+
+int recvSize;
+char recvBuff[1025];
+char *message, client_message[2000];
 
 int server_listen(void) {
     int socket_desc, client_sock, c;
@@ -92,11 +98,7 @@ int server_close_connection(void) {
  * This will handle connection for each client
  */
 void *connection_handler(void *socket_desc) {
-    //Get the socket descriptor
     int sock = *(int*)socket_desc;
-    int recvSize;
-    char recvBuff[1025];
-    char *message, client_message[2000];
 
     // clear recvBuff
     memset(recvBuff, '\0', sizeof(recvBuff));
@@ -105,24 +107,30 @@ void *connection_handler(void *socket_desc) {
     message = "Thread has taken connection.\n";
     write(sock , message , strlen(message));
 
-    sleep(2);
+    sleep(5);
+    connection_recurse(sock);
 
-    message = "and then slept for 2 seconds and sent this.\n";
-    write(sock , message , strlen(message));
+    return NULL;
+} 
+
+void connection_recurse(int sock) {
 
     // read a message from the client
     recvSize = read(sock, recvBuff, 1024);
     if (recvSize == 0) {
         puts("Client disconnected");
+        printf("Client disconnect\n");
         fflush(stdout);
     }
     else if (recvSize < 0) {
         printf("ERROR reading from socket");
-        return NULL;
     }
-
-    printf("Here is the message: %s\n",recvBuff);
-         
-    return NULL;
-} 
-
+    else {
+        printf("Message from client: %s\n",recvBuff);
+        sleep(3);
+        printf("Sending message back to client\n");
+        message = "Server response.\n";
+        write(sock, message, strlen(message));
+        connection_recurse(sock);
+    }
+}
