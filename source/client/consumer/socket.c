@@ -153,7 +153,9 @@ int consumer_connection_shutdown() {
 
 
 int consumer_test_message() {
+	printf("--------------------\n");
 	consumer_connect();
 	consumer_connection_message();
 	consumer_connection_shutdown();
+	printf("--------------------\n");
 }
