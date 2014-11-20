@@ -3,7 +3,7 @@
  */
 #include <tchar.h>
 #include <strsafe.h>
-#include "client.h"
+#include "consumer.h"
 
 #define MAX_THREADS 3
 #define BUF_SIZE 255
