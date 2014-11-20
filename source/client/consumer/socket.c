@@ -115,12 +115,17 @@ int consumer_connection_message() {
 	// Receive data until the server closes the connection
 	do {
 		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-		if (iResult > 0)
+		if (iResult > 0) {
 			printf("Bytes received: %d\n", iResult);
-		else if (iResult == 0)
+			recvbuf[iResult] = '\0';
+			printf("recvbuf: %s", recvbuf);
+		}
+		else if (iResult == 0) {
 			printf("Connection closed\n");
-		else
+		}
+		else {
 			printf("recv failed: %d\n", WSAGetLastError());
+		}
 	} while (iResult > 0);
 	
 	return 0;
