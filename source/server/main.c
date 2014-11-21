@@ -5,28 +5,9 @@
  * Created on November 9, 2014, 5:58 PM
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
 #include "server.h"
 
-int initialize_producers(void) {
-    int numProducers = 5;
 
-    int i;
-    for (i = 0; i < numProducers; i++) {
-        producers[i] = producer_new();
-    }
-
-    for (i = 0; i < numProducers; i++) {
-        producer_produce(producers[i]);
-    }
-    return 0;
-}
-
-int execute_producers(void) {
-    return 0;
-}
 int report_status(void) {
     return 0;
 }
@@ -35,8 +16,24 @@ int report_status(void) {
  * Initialize program and begin listening for client requests 
  */
 int main(int argc, char** argv) {
-    initialize_producers();
-    server_listen();
+    debug.print = 1;
+    ResourceBuffer *rb;
+    Environment *env = malloc(sizeof(*env));
+
+    // initialize mutex
+    pthread_mutex_init(&bufferMutex, NULL);
+    pthread_cond_init (&bufferHasRoom, NULL);
+    // initialize buffer
+    env->bufferp = resource_buffer_new(3);
+
+
+
+    // initialize producers
+    initialize_producers(env->bufferp, 5);
+
+    // wait for connections
+    server_listen(env);
+
     return (EXIT_SUCCESS);
 }
 

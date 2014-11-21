@@ -111,7 +111,7 @@ int consumer_connection_message() {
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
 
-	char *sendbuf = "client message";
+	char *sendbuf = "consume";
 	consumer_connection_send_string(sendbuf);
 
 	printf("Receiving...\n");

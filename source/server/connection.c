@@ -6,39 +6,36 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h> 
-#include <pthread.h>
 
 #include "server.h"
 
 
 //the thread function
 void *connection_handler(void *);
-void connection_recurse(int);
+void connection_recurse(Environment*);
 
 
 int recvSize;
 char recvBuff[1025];
 char *message, client_message[2000];
 
-int server_listen(void) {
-    int socket_desc, client_sock, c;
+int server_listen(Environment *env) {
     struct sockaddr_in server, client;
+    int c;
     pthread_t thread_id;
     c = sizeof(struct sockaddr_in);
      
     //Create socket
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_desc == -1) {
-        printf("Could not create socket");
+    env->socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+    if (env->socket_desc == -1) {
+        if (debug.print) puts("Could not create socket");
     }
-    puts("Socket created");
+    if (debug.print) puts("Socket created");
      
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
@@ -46,31 +43,31 @@ int server_listen(void) {
     server.sin_port = htons( 60118 );
      
     //Bind
-    if(bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) {
+    if(bind(env->socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) {
         //print the error message
         perror("bind failed. Error");
         return 1;
     }
-    puts("bind done");
+    if (debug.print) puts("bind done");
      
     //Listen
-    listen(socket_desc, 3);
+    listen(env->socket_desc, 3);
      
     //Accept and incoming connection
-    puts("Waiting for incoming connections...");
+    if (debug.print) puts("Waiting for incoming connections...");
 	
-    while((client_sock = accept(
-        socket_desc, 
+    while((env->client_sock = accept(
+        env->socket_desc, 
         (struct sockaddr *)&client, 
         (socklen_t*)&c)
     )) {
-        puts("Connection accepted");
+        if (debug.print) puts("Connection accepted");
          
         if( pthread_create(
             &thread_id, 
             NULL, 
             connection_handler, 
-            (void*)&client_sock
+            (void*)env
         ) < 0) {
             perror("could not create thread");
             return 1;
@@ -78,10 +75,10 @@ int server_listen(void) {
          
         //Now join the thread , so that we dont terminate before the thread
         //pthread_join( thread_id , NULL);
-        puts("Handler assigned");
+        if (debug.print) puts("Handler assigned");
     }
      
-    if (client_sock < 0) {
+    if (env->client_sock < 0) {
         perror("accept failed");
         return 1;
     }
@@ -94,43 +91,72 @@ int server_close_connection(void) {
 }
 
 
+int consumer_service_get_resource(Environment *env, Resource *r) {
+
+    pthread_mutex_lock(&bufferMutex);
+
+    // buffer is full
+    if (env->bufferp->count == env->bufferp->size) {
+        pthread_cond_signal(&bufferHasRoom);
+    }
+    // dequeue resource from buffer
+    resource_buffer_dequeue(env->bufferp, r);
+
+    pthread_mutex_unlock(&bufferMutex);
+
+    return 0;
+}
+
+
+
 /**
  * This will handle connection for each client
  */
-void *connection_handler(void *socket_desc) {
-    int sock = *(int*)socket_desc;
-
-    // clear recvBuff
-    memset(recvBuff, '\0', sizeof(recvBuff));
+void *connection_handler(void *ep) {
+    Environment *env = (Environment *)ep;
      
     //Send some messages to the client
     message = "Thread has taken connection.\n";
-    write(sock , message , strlen(message));
+    write(env->client_sock , message , strlen(message));
 
     sleep(5);
-    connection_recurse(sock);
+    connection_recurse(env);
 
     return NULL;
 } 
 
-void connection_recurse(int sock) {
+void connection_recurse(Environment *env) {
+    // clear recvBuff
+    memset(recvBuff, '\0', sizeof(recvBuff));
 
     // read a message from the client
-    recvSize = read(sock, recvBuff, 1024);
+    recvSize = read(env->client_sock, recvBuff, 1024);
     if (recvSize == 0) {
-        puts("Client disconnected");
-        printf("Client disconnect\n");
+        if (debug.print) printf("Client disconnect\n");
         fflush(stdout);
     }
     else if (recvSize < 0) {
-        printf("ERROR reading from socket");
+        if (debug.print) printf("ERROR reading from socket");
     }
     else {
-        printf("Message from client: %s\n",recvBuff);
+        if (debug.print) printf("Message from client: %s\n",recvBuff);
+        message = "unrecognized client command.\n";
+
+        if( strcmp(recvBuff,"consume") == 0 ) {
+            if (debug.print) printf("attempting to consume.\n");
+            Resource *r;
+            if (consumer_service_get_resource(env, r)) {
+                if (debug.print) printf("consumed r%d\n", r->id);
+            }
+            sprintf(message, "here is %d\n", r->id);
+        }
+        else {
+
+        }
+
+        if (debug.print) printf("Sending message back to client:\n%s\n", message);
+        write(env->client_sock, message, strlen(message));
         sleep(3);
-        printf("Sending message back to client\n");
-        message = "Server response.\n";
-        write(sock, message, strlen(message));
-        connection_recurse(sock);
+        connection_recurse(env);
     }
 }
