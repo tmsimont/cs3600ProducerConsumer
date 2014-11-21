@@ -15,14 +15,19 @@
 #include "server.h"
 
 
+typedef struct {
+    Environment* env;
+    int client_sock;
+} ConnectionThread;
+
 //the thread function
 void *connection_handler(void *);
-void connection_recurse(Environment*);
-
+void connection_recurse(ConnectionThread*);
 
 int recvSize;
 char recvBuff[1025];
 char *message, client_message[2000];
+
 
 int server_listen(Environment *env) {
     struct sockaddr_in server, client;
@@ -55,19 +60,26 @@ int server_listen(Environment *env) {
      
     //Accept and incoming connection
     if (debug.print) puts("Waiting for incoming connections...");
-	
-    while((env->client_sock = accept(
+
+    int client_sock;
+    while((client_sock = accept(
         env->socket_desc, 
         (struct sockaddr *)&client, 
         (socklen_t*)&c)
     )) {
-        if (debug.print) puts("Connection accepted");
-         
+        if (debug.print) printf("Connection accepted (%d)\n", client_sock);
+        
+        ConnectionThread *t = malloc(sizeof(*t));
+        t->client_sock = client_sock;
+        t->env = env;
+
+        if (debug.print) printf("Connection struct ready\n");
+ 
         if( pthread_create(
             &thread_id, 
             NULL, 
             connection_handler, 
-            (void*)env
+            (void*)t
         ) < 0) {
             perror("could not create thread");
             return 1;
@@ -78,7 +90,7 @@ int server_listen(Environment *env) {
         if (debug.print) puts("Handler assigned");
     }
      
-    if (env->client_sock < 0) {
+    if (client_sock < 0) {
         perror("accept failed");
         return 1;
     }
@@ -91,7 +103,7 @@ int server_close_connection(void) {
 }
 
 
-int consumer_service_get_resource(Environment *env, Resource *r) {
+int consumer_service_get_resource(Environment *env, Resource **r) {
 
     pthread_mutex_lock(&bufferMutex);
 
@@ -112,25 +124,28 @@ int consumer_service_get_resource(Environment *env, Resource *r) {
 /**
  * This will handle connection for each client
  */
-void *connection_handler(void *ep) {
-    Environment *env = (Environment *)ep;
+void *connection_handler(void *tp) {
+    ConnectionThread *t = (ConnectionThread *)tp;
      
+    if (debug.print) printf("Tryna write to sock %d\n",t->client_sock);
     //Send some messages to the client
     message = "Thread has taken connection.\n";
-    write(env->client_sock , message , strlen(message));
+    write(t->client_sock , message , strlen(message));
 
     sleep(5);
-    connection_recurse(env);
+    connection_recurse(t);
 
     return NULL;
 } 
 
-void connection_recurse(Environment *env) {
+void connection_recurse(ConnectionThread *t) {
     // clear recvBuff
     memset(recvBuff, '\0', sizeof(recvBuff));
 
+    if (debug.print) printf("Tryna read sock %d\n",t->client_sock);
+
     // read a message from the client
-    recvSize = read(env->client_sock, recvBuff, 1024);
+    recvSize = read(t->client_sock, recvBuff, 1024);
     if (recvSize == 0) {
         if (debug.print) printf("Client disconnect\n");
         fflush(stdout);
@@ -145,18 +160,22 @@ void connection_recurse(Environment *env) {
         if( strcmp(recvBuff,"consume") == 0 ) {
             if (debug.print) printf("attempting to consume.\n");
             Resource *r;
-            if (consumer_service_get_resource(env, r)) {
+            if (consumer_service_get_resource(t->env, &r) == 0) {
+                char message2[1024];
                 if (debug.print) printf("consumed r%d\n", r->id);
+                sprintf(message2, "here is %d\n", r->id);
+                write(t->client_sock, message2, strlen(message2));
+                sleep(3);
+                connection_recurse(t);
             }
-            sprintf(message, "here is %d\n", r->id);
         }
         else {
 
         }
 
         if (debug.print) printf("Sending message back to client:\n%s\n", message);
-        write(env->client_sock, message, strlen(message));
+        write(t->client_sock, message, strlen(message));
         sleep(3);
-        connection_recurse(env);
+        connection_recurse(t);
     }
 }

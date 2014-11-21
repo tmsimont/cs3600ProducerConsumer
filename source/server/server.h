@@ -44,7 +44,6 @@ Producer *producer_new(ResourceBuffer*);
 typedef struct _environment Environment;
 struct _environment {
     int socket_desc;
-    int client_sock;
     ResourceBuffer *bufferp;
 };
 
