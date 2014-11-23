@@ -1,7 +1,8 @@
 #include "consumer.h"
 
 int main() {
-	consumer_test_message();
-	while (1);
+	debug.print = 0;
+	consumer_connect_and_consume();
+	consumer_connection_shutdown();
 	return 0;
 }

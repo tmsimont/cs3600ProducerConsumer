@@ -17,6 +17,10 @@ int report_status(void) {
  */
 int main(int argc, char** argv) {
     debug.print = 1;
+
+    pidx = 0;
+    resourceID = 0;
+
     ResourceBuffer *rb;
     Environment *env = malloc(sizeof(*env));
 

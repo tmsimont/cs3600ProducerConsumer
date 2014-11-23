@@ -9,9 +9,6 @@
 
 #define MEGEXTRA (1024*1024)
 
-// index for thread creation/id assignment
-int pidx = 0;
-
 // pthread attribute for stack size
 pthread_attr_t attr;
 

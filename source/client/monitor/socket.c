@@ -1,6 +1,6 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include "consumer.h"
+#include "monitor.h"
 
 #pragma comment(lib, "Ws2_32.lib")
 WSADATA wsaData;
@@ -8,13 +8,13 @@ SOCKET ConnectSocket = INVALID_SOCKET;
 
 #define DEFAULT_BUFLEN 512
 
-int consumer_connection_send_string(char *);
-int consumer_connection_consume();
+int monitor_connection_send_string(char *);
+int monitor_connection_monitor();
 
 /**
- * http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
- */
-int consumer_connect_and_consume() {
+* http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
+*/
+int monitor_connect_and_monitor() {
 	int iResult;
 	struct addrinfo
 		*result = NULL,
@@ -93,17 +93,17 @@ int consumer_connect_and_consume() {
 
 	// Receive the connection handshake message
 	if (debug.print) printf("Shaking hands...\n");
-	consumer_connection_send_string("handshake:consumer");
+	monitor_connection_send_string("handshake:monitor");
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
 	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
 	if (iResult > 0) {
 		if (debug.print) printf("Bytes received: %d\n", iResult);
 		recvbuf[iResult] = '\0';
-		if (strcmp(recvbuf, "handshake:consumer") == 0) {
+		if (strcmp(recvbuf, "handshake:monitor") == 0) {
 			if (debug.print) printf("HANDSHAKE SUCCESS:\nrecvbuf: %s\n", recvbuf);
-			if (debug.print) puts("consuming...");
-			consumer_connection_consume();
+			if (debug.print) puts("monitoring...");
+			monitor_connection_monitor();
 		}
 		else {
 			if (debug.print) printf("HANDSHAKE FAIL:\nrecvbuf: %s\n", recvbuf);
@@ -119,7 +119,7 @@ int consumer_connect_and_consume() {
 	return 0;
 }
 
-int consumer_connection_send_string(char *sendbuf) {
+int monitor_connection_send_string(char *sendbuf) {
 	if (debug.print) printf("Sending: %s...\n", sendbuf);
 	int iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
 	if (iResult == SOCKET_ERROR) {
@@ -134,14 +134,14 @@ int consumer_connection_send_string(char *sendbuf) {
 	if (debug.print) printf("Bytes Sent: %ld\n", iResult);
 }
 
-int consumer_connection_consume() {
+int monitor_connection_monitor() {
 	int iResult;
 
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
 
-	char *sendbuf = "consume";
-	consumer_connection_send_string(sendbuf);
+	char *sendbuf = "report";
+	monitor_connection_send_string(sendbuf);
 
 	if (debug.print) printf("Receiving...\n");
 	// Receive a message
@@ -150,7 +150,8 @@ int consumer_connection_consume() {
 		if (debug.print) printf("Bytes received: %d\n", iResult);
 		recvbuf[iResult] = '\0';
 		if (debug.print) printf("recvbuf: %s", recvbuf);
-		consumer_connection_consume();
+		if (debug.console_report) printf("%s\n", recvbuf);
+		monitor_connection_monitor();
 	}
 	else if (iResult == 0) {
 		if (debug.print) printf("Connection closed\n");
@@ -158,12 +159,12 @@ int consumer_connection_consume() {
 	else {
 		if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
 	}
-	
+
 	return 0;
 }
 
 
-int consumer_connection_shutdown() {
+int monitor_connection_shutdown() {
 	int iResult;
 
 	// shutdown the connection for sending since no more data will be sent

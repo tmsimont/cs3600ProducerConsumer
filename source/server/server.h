@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <string.h>
 
 #define MAX_PRODUCERS 128
 
@@ -15,9 +16,12 @@
 typedef struct _Resource Resource;
 struct _Resource {
     int id;
+    int produced_by;
+    int consumed_by;
     Resource *next;
 };
 Resource *resource_new(int);
+int resourceID;
 
 // ResourceBuffer
 typedef struct _ResourceBuffer ResourceBuffer;
@@ -38,6 +42,7 @@ pthread_cond_t bufferHasRoom;
 // Producer
 typedef struct _Producer Producer;
 Producer *producers[MAX_PRODUCERS];
+int pidx;
 Producer *producer_new(ResourceBuffer*);
 
 // Primary server function
@@ -47,6 +52,7 @@ struct _environment {
     ResourceBuffer *bufferp;
 };
 
+int consumer_service_new(Environment *, int);
 
 int report_status(void);
 int server_listen(Environment*);
@@ -64,3 +70,14 @@ typedef struct {
     int client_sock;
     pthread_t thread;
 } ConsumerService;
+int consumer_service_new(Environment *, int);
+int consumer_service_get_resource(Environment *, Resource **);
+
+
+// helper struct for individual consumer service threads
+typedef struct {
+    Environment* env;
+    int client_sock;
+    pthread_t thread;
+} MonitorService;
+int monitor_service_new(Environment *, int);

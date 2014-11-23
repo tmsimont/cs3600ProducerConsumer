@@ -1,6 +1,4 @@
-#include <windows.h>
-#include <stdio.h>
-#include <tchar.h>
+#include "monitor.h"
 
 
 STARTUPINFO si[5];
@@ -14,10 +12,17 @@ void monitor_shutdown();
  * @see: http://msdn.microsoft.com/en-us/library/windows/desktop/ms682512(v=vs.85).aspx
  */
 void _tmain(int argc, TCHAR *argv[]) {
+	debug.print = 0;
+	debug.console_report = 1;
+
 	monitor_new_process();
 	monitor_new_process();
 	monitor_new_process();
+
+	start_getreport_thread();
+	
 	monitor_shutdown();
+	getreport_shutdown();
 }
 
 void monitor_new_process() {

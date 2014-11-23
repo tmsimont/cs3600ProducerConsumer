@@ -14,7 +14,8 @@ ResourceBuffer *resource_buffer_new(int bufferSize) {
 
 Resource *resource_new(int i) {
     Resource *r = malloc(sizeof(*r));
-    r->id = i;
+    r->produced_by = i;
+    r->id = resourceID++;
     return r;
 }
 
