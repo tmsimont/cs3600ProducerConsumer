@@ -11,29 +11,16 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h> 
-
 #include "server.h"
 
 
-typedef struct {
-    Environment* env;
-    int client_sock;
-} ConnectionThread;
-
-//the thread function
+// connection thread functions
 void *connection_handler(void *);
-void connection_recurse(ConnectionThread*);
-
-int recvSize;
-char recvBuff[1025];
-char *message, client_message[2000];
-
+int connection_handshake(Environment *, int);
+void connection_await_and_handle_message(ConsumerService*);
 
 int server_listen(Environment *env) {
-    struct sockaddr_in server, client;
-    int c;
-    pthread_t thread_id;
-    c = sizeof(struct sockaddr_in);
+    struct sockaddr_in server;
      
     //Create socket
     env->socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -57,39 +44,16 @@ int server_listen(Environment *env) {
      
     //Listen
     listen(env->socket_desc, 3);
-     
-    //Accept and incoming connection
     if (debug.print) puts("Waiting for incoming connections...");
 
+    //Accept incoming connection
     int client_sock;
-    while((client_sock = accept(
-        env->socket_desc, 
-        (struct sockaddr *)&client, 
-        (socklen_t*)&c)
-    )) {
+    while((client_sock = accept(env->socket_desc, NULL, NULL))) {
         if (debug.print) printf("Connection accepted (%d)\n", client_sock);
-        
-        ConnectionThread *t = malloc(sizeof(*t));
-        t->client_sock = client_sock;
-        t->env = env;
-
-        if (debug.print) printf("Connection struct ready\n");
- 
-        if( pthread_create(
-            &thread_id, 
-            NULL, 
-            connection_handler, 
-            (void*)t
-        ) < 0) {
-            perror("could not create thread");
-            return 1;
-        }
-         
-        //Now join the thread , so that we dont terminate before the thread
-        //pthread_join( thread_id , NULL);
-        if (debug.print) puts("Handler assigned");
+        connection_handshake(env, client_sock);
     }
      
+    // Identify failure to accept()
     if (client_sock < 0) {
         perror("accept failed");
         return 1;
@@ -102,9 +66,11 @@ int server_close_connection(void) {
     return 0;
 }
 
-
+/**
+ * This will pull a resource off of the buffer for a client process.
+ * Any waiting producers are notified that the buffer now has room.
+ */
 int consumer_service_get_resource(Environment *env, Resource **r) {
-
     pthread_mutex_lock(&bufferMutex);
 
     // buffer is full
@@ -115,48 +81,110 @@ int consumer_service_get_resource(Environment *env, Resource **r) {
     resource_buffer_dequeue(env->bufferp, r);
 
     pthread_mutex_unlock(&bufferMutex);
-
     return 0;
 }
 
-
-
 /**
- * This will handle connection for each client
+ * This will notify the client that the connection is established 
+ * between the client process and the server thread.
  */
 void *connection_handler(void *tp) {
-    ConnectionThread *t = (ConnectionThread *)tp;
+    char *message;
+    ConsumerService *t = (ConsumerService *)tp;
      
-    if (debug.print) printf("Tryna write to sock %d\n",t->client_sock);
-    //Send some messages to the client
-    message = "Thread has taken connection.\n";
+    // Notify client that a thread has taken the connection
+    if (debug.print) printf("Write to sock %d\n",t->client_sock);
+    message = "handshake:consumer\n";
     write(t->client_sock , message , strlen(message));
 
-    sleep(5);
-    connection_recurse(t);
+    // wait for client messages
+    connection_await_and_handle_message(t);
 
     return NULL;
-} 
+}
 
-void connection_recurse(ConnectionThread *t) {
+/**
+ * Initial message from incoming connection, attempt to validate.
+ */
+int connection_handshake(Environment *env, int client_sock) {
+    char *message;
+    int recvSize;
+    char recvBuff[1025];
+
+    // read a message from the client
+    if (debug.print) printf("Attempting to handshake w/ sock %d\n",client_sock);
+    recvSize = read(client_sock, recvBuff, 1024);
+    recvBuff[recvSize] = '\0';
+    if (recvSize == 0) {
+        // Client has disconnected
+        if (debug.print) printf("Client disconnect\n");
+        return -1;
+    }
+    else if (recvSize < 0) {
+        // Error reading message
+        if (debug.print) printf("ERROR reading from socket\n");
+            return -1;
+    }
+    else {
+        if( strcmp(recvBuff,"handshake:consumer") == 0 ) {
+            // incoming connection is new consumer
+            ConsumerService *t = malloc(sizeof(*t));
+            t->client_sock = client_sock;
+            t->env = env;
+            if (debug.print) printf("consumer service struct ready\n");
+
+            if( pthread_create(&(t->thread), NULL, connection_handler, (void*)t) < 0) {
+                printf("could not create thread\n");
+                return -1;
+            }
+
+            if (debug.print) puts("Handler assigned");
+            return 0;
+        }
+        else if( strcmp(recvBuff,"handshake:monitor") == 0 ) {
+            // incoming connection is new monitor
+            return 0;
+        }
+        else {
+            if (debug.print) printf("invalid request from client:\n%s\n", recvBuff);
+            message = "invalid request\n";
+            if (debug.print) printf("Sending message back to client:\n%s\n", message);
+            write(client_sock, message, strlen(message));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * This handles incoming communications from a client socket for 
+ * an individual client thread.
+ */
+void connection_await_and_handle_message(ConsumerService *t) {
+    char *message;
+    int recvSize;
+    char recvBuff[1025];
+
     // clear recvBuff
     memset(recvBuff, '\0', sizeof(recvBuff));
 
-    if (debug.print) printf("Tryna read sock %d\n",t->client_sock);
-
     // read a message from the client
+    if (debug.print) printf("Attempt to read sock %d\n",t->client_sock);
     recvSize = read(t->client_sock, recvBuff, 1024);
     if (recvSize == 0) {
+        // Client has disconnected
         if (debug.print) printf("Client disconnect\n");
         fflush(stdout);
+        pthread_exit(NULL);
     }
     else if (recvSize < 0) {
-        if (debug.print) printf("ERROR reading from socket");
+        // Error reading message
+        if (debug.print) printf("ERROR reading from socket\n");
+        pthread_exit(NULL);
     }
     else {
+        // Valid message from client
         if (debug.print) printf("Message from client: %s\n",recvBuff);
-        message = "unrecognized client command.\n";
-
         if( strcmp(recvBuff,"consume") == 0 ) {
             if (debug.print) printf("attempting to consume.\n");
             Resource *r;
@@ -166,16 +194,16 @@ void connection_recurse(ConnectionThread *t) {
                 sprintf(message2, "here is %d\n", r->id);
                 write(t->client_sock, message2, strlen(message2));
                 sleep(3);
-                connection_recurse(t);
+                connection_await_and_handle_message(t);
             }
         }
         else {
-
+            message = "unrecognized client command.\n";
         }
 
         if (debug.print) printf("Sending message back to client:\n%s\n", message);
         write(t->client_sock, message, strlen(message));
         sleep(3);
-        connection_recurse(t);
+        connection_await_and_handle_message(t);
     }
 }

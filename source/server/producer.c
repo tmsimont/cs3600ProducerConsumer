@@ -73,11 +73,10 @@ Producer *producer_new(ResourceBuffer *rb) {
     pidx++;
 
     // create the producer thread
-    p->thread = pthread_create(&(p->thread), &attr, producer_produce, (void *)p);
+    pthread_create(&(p->thread), &attr, producer_produce, (void *)p);
 
     // clean up
     pthread_attr_destroy(&attr);
-
 
     // return Producer to caller
     return p;

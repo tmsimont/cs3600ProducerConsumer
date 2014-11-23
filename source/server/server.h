@@ -56,3 +56,11 @@ int server_close_connection(void);
 struct {
     unsigned int print : 1;
 } debug;
+
+
+// helper struct for individual consumer service threads
+typedef struct {
+    Environment* env;
+    int client_sock;
+    pthread_t thread;
+} ConsumerService;

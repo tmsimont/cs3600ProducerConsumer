@@ -7,6 +7,8 @@ SOCKET ConnectSocket = INVALID_SOCKET;
 
 #define DEFAULT_BUFLEN 512
 
+int consumer_connection_send_string(char *);
+int consumer_connection_consume();
 
 /**
  * http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
@@ -75,7 +77,7 @@ int consumer_connect() {
 	// Should really try the next address returned by getaddrinfo
 	// if the connect call failed
 
-	// returned by getaddrinfo and print an error message
+	// addr info no longer needed
 	freeaddrinfo(result);
 
 	if (ConnectSocket == INVALID_SOCKET) {
@@ -87,11 +89,37 @@ int consumer_connect() {
 		printf("connect socket valid\n");
 	}
 
+
+	// Receive the connection handshake message
+	printf("Shaking hands...\n");
+	consumer_connection_send_string("handshake:consumer");
+	int recvbuflen = DEFAULT_BUFLEN;
+	char recvbuf[DEFAULT_BUFLEN];
+	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+	if (iResult > 0) {
+		printf("Bytes received: %d\n", iResult);
+		recvbuf[iResult] = '\0';
+		if (strcmp(recvbuf, "handshake:consumer") == 0) {
+			printf("HANDSHAKE SUCCESS:\nrecvbuf: %s", recvbuf);
+			puts("consuming...");
+			consumer_connection_consume();
+		}
+		else {
+			printf("HANDSHAKE FAIL:\nrecvbuf: %s", recvbuf);
+		}
+	}
+	else if (iResult == 0) {
+		printf("Connection closed\n");
+	}
+	else {
+		printf("recv failed: %d\n", WSAGetLastError());
+	}
+
 	return 0;
 }
 
 int consumer_connection_send_string(char *sendbuf) {
-	printf("Sending...\n");
+	printf("Sending: %s...\n", sendbuf);
 	int iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
 	if (iResult == SOCKET_ERROR) {
 		printf("send failed: %d\n", WSAGetLastError());
@@ -105,7 +133,7 @@ int consumer_connection_send_string(char *sendbuf) {
 	printf("Bytes Sent: %ld\n", iResult);
 }
 
-int consumer_connection_message() {
+int consumer_connection_consume() {
 	int iResult;
 
 	int recvbuflen = DEFAULT_BUFLEN;
@@ -121,7 +149,7 @@ int consumer_connection_message() {
 		printf("Bytes received: %d\n", iResult);
 		recvbuf[iResult] = '\0';
 		printf("recvbuf: %s", recvbuf);
-		consumer_connection_message();
+		consumer_connection_consume();
 	}
 	else if (iResult == 0) {
 		printf("Connection closed\n");
@@ -162,7 +190,7 @@ int consumer_connection_shutdown() {
 int consumer_test_message() {
 	printf("--------------------\n");
 	consumer_connect();
-	consumer_connection_message();
+	consumer_connection_consume();
 	consumer_connection_shutdown();
 	printf("--------------------\n");
 }
