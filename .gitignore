@@ -12,3 +12,4 @@ vs/*
 vs
 nb/*
 nb
+!vs/client/monitor/builder.ui

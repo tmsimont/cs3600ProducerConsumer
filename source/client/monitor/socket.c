@@ -151,6 +151,8 @@ int monitor_connection_monitor() {
 		recvbuf[iResult] = '\0';
 		if (debug.print) printf("recvbuf: %s", recvbuf);
 		if (debug.console_report) printf("%s\n", recvbuf);
+		recvbuf[iResult + 1] = '\n';
+		message_buffer(0, recvbuf);
 		monitor_connection_monitor();
 	}
 	else if (iResult == 0) {

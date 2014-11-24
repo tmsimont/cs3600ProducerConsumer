@@ -79,7 +79,7 @@ void monitor_service_await_and_handle_message(ConsumerService *t) {
         }
 
         if (debug.print) printf("Sending message back to client:\n%s\n", message);
-        write(t->client_sock, message, strlen(message));
+        xml_write_message(t->client_sock, message);
         sleep(3);
         monitor_service_await_and_handle_message(t);
     }

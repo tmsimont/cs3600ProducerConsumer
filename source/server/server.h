@@ -81,3 +81,5 @@ typedef struct {
     pthread_t thread;
 } MonitorService;
 int monitor_service_new(Environment *, int);
+
+int xml_write_message(int, char *);
