@@ -18,6 +18,7 @@ int start_ui();
 
 int message_buffer(int, char *);
 int xml_write_message(int, char *);
+int xml_parse_message(char *);
 
 
 struct {

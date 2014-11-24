@@ -153,6 +153,7 @@ int monitor_connection_monitor() {
 		if (debug.console_report) printf("%s\n", recvbuf);
 		recvbuf[iResult + 1] = '\n';
 		message_buffer(0, recvbuf);
+		xml_parse_message(recvbuf);
 		monitor_connection_monitor();
 	}
 	else if (iResult == 0) {

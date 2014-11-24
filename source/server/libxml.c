@@ -9,7 +9,7 @@
 
 int xml_write_message(int socket, char *message) {
 
-    xmlNodePtr n;
+    xmlNodePtr root_node;
     xmlDocPtr doc;
     xmlChar *xmlbuff;
     int buffersize;
@@ -18,9 +18,20 @@ int xml_write_message(int socket, char *message) {
      * Create the document.
      */
     doc = xmlNewDoc(BAD_CAST "1.0");
-    n = xmlNewNode(NULL, BAD_CAST "message");
-    xmlNodeSetContent(n, BAD_CAST message);
-    xmlDocSetRootElement(doc, n);
+    root_node = xmlNewNode(NULL, BAD_CAST "message");
+    xmlDocSetRootElement(doc, root_node);
+
+    /* 
+     * xmlNewChild() creates a new node, which is "attached" as child node
+     * of root_node node. 
+     */
+    xmlNewChild(root_node, NULL, BAD_CAST "node1",
+                BAD_CAST "content of node 1");
+    /* 
+     * The same as above, but the new child node doesn't have a content 
+     */
+    xmlNewChild(root_node, NULL, BAD_CAST "node2", NULL);
+
 
     /*
      * Dump the document to a buffer and print it
