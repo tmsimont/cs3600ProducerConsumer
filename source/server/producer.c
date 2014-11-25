@@ -22,11 +22,13 @@ void *producer_produce(void *pi) {
     while(1) {
         p->status = 1;
 
+        if(debug.print) printf("producer %d acquiring bufferMutex\n", p->id);
         pthread_mutex_lock(&bufferMutex);
+        if(debug.print) printf("producer %d acquired bufferMutex\n", p->id);
 
         // buffer is full 
         if (p->bufferp->count == p->bufferp->size) {
-            if(debug.print) printf("producer %d is waiting...\n", p->id);
+            if(debug.print) printf("producer %d is waiting (%d to %d)...\n", p->id, p->bufferp->count, p->bufferp->size);
             // wait until there is room in buffer
             pthread_cond_wait(&bufferHasRoom, &bufferMutex);
         }
@@ -36,10 +38,12 @@ void *producer_produce(void *pi) {
         resource_buffer_enqueue(p->bufferp, resource_new(p->id));
         p->resources_produced++;
         resource_buffer_print(p->bufferp);
-        sleep(p->id * 2);
-
         p->status = 0;
         pthread_mutex_unlock(&bufferMutex);
+
+        sleep(produceDelay);
+
+        if(debug.print) printf("producer %d released bufferMutex\n", p->id);
 
     }
 
@@ -55,12 +59,6 @@ Producer *producer_new(ResourceBuffer *rb) {
     // allocate memory for Producer
     Producer *p = malloc(sizeof(*p));
 
-    // configure thread stack size based on Producer size
-    size_t stacksize;
-    pthread_attr_init(&attr);
-    stacksize = sizeof(Producer)*1024+MEGEXTRA;
-    pthread_attr_setstacksize (&attr, stacksize);
-
     // set Producer struct properties and record producer to global array
     p->id = pidx;
     p->bufferp = rb;
@@ -70,10 +68,7 @@ Producer *producer_new(ResourceBuffer *rb) {
     pidx++;
 
     // create the producer thread
-    pthread_create(&(p->thread), &attr, producer_produce, (void *)p);
-
-    // clean up
-    pthread_attr_destroy(&attr);
+    pthread_create(&(p->thread), NULL, producer_produce, (void *)p);
 
     // return Producer to caller
     return p;

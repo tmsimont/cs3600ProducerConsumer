@@ -2,7 +2,7 @@
 #include <libxml/parser.h>
 
 
-void monitor_service_await_and_handle_message(MonitorService*);
+int monitor_service_await_and_handle_message(MonitorService*);
 void *monitor_service_connection_handler(void *);
 void monitor_service_write_report(MonitorService *);
 
@@ -13,6 +13,9 @@ int monitor_service_new(Environment *env, int client_sock) {
     MonitorService *t = malloc(sizeof(*t));
     t->client_sock = client_sock;
     t->env = env;
+    t->ready = 0;
+    pthread_mutex_init(&(t->monitorReadyMutex), NULL);
+    pthread_cond_init(&(t->monitorNowReady), NULL);
     if (debug.print) printf("monitor service struct ready\n");
 
     if( pthread_create(&(t->thread), NULL, monitor_service_connection_handler, (void*)t) < 0) {
@@ -24,6 +27,97 @@ int monitor_service_new(Environment *env, int client_sock) {
     return 0;
 }
 
+int monitor_service_remove(MonitorService *ms) {
+
+    pthread_mutex_lock(&monitorListMutex);
+
+    // remove from linked list
+    if (monitorList->count == 0) {
+        if (debug.print) printf("unable to remove MS-%d from empty list (%d)\n", ms->id, monitorList->count);
+    }
+    else if (monitorList->count == 1) {
+        monitorList->head = NULL;
+        monitorList->tail = NULL;
+        monitorList->count = 0;
+        if (debug.print) printf("MS-%d removed from singleton list (%d)\n", ms->id, monitorList->count);
+    }
+    else {
+        if (ms->id == monitorList->head->id) {
+            monitorList->head = monitorList->head->next;
+            monitorList->head->prev = NULL;
+            monitorList->count--;
+            if (debug.print) printf("MS-%d removed from head of large list (%d)\n", ms->id, monitorList->count);
+        }
+        else {
+            MonitorService *temp;
+            temp = monitorList->head;
+            while (temp->next->next != NULL && temp->next->id != ms->id) {
+                temp = temp->next;
+            }
+            if (temp->next->id == ms->id) {
+                if (temp->next->next != NULL) {
+                    temp->next->next->prev = temp;
+                    temp->next = temp->next->next;
+                    monitorList->count--;
+                    if (debug.print) printf("MS-%d removed large list (%d)\n", ms->id, monitorList->count);
+                }
+                else {
+                    monitorList->tail = temp;
+                    temp->next = NULL;
+                    monitorList->count--;
+                    if (debug.print) printf("MS-%d removed from end of large list (%d)\n", ms->id, monitorList->count);
+                }
+            }
+            else {
+                if (debug.print) printf("unable to remove MS-%d from non-empty list (%d)\n", ms->id, monitorList->count);
+                // service not in list
+            }
+        }
+    }
+
+    free(ms);
+    if (debug.print) printf("monitor struct freed from memory\n");
+
+    pthread_mutex_unlock(&monitorListMutex);
+
+}
+
+void *monitor_push_reports_handler(void *tp) {
+    if (debug.print) printf("push reports\n");
+    if (monitorList->count == 0) {
+        // no monitors
+        if (debug.print) printf("no monitors\n");
+    }
+    else {
+        MonitorService *ms = monitorList->head;
+        while (ms != NULL) {
+            if (debug.print) printf("lock for push\n");
+            pthread_mutex_lock(&(ms->monitorReadyMutex));
+            if (ms->ready == 1) {
+            } else {
+                // wait until the monitor is ready
+                if (debug.print) printf("wait for monitor\n");
+                pthread_cond_wait(&(ms->monitorNowReady), &(ms->monitorReadyMutex));
+            }
+            ms->ready = 0;
+            monitor_service_write_report(ms);
+            pthread_mutex_unlock(&(ms->monitorReadyMutex));
+            ms = ms->next;
+        }
+    }
+    pthread_exit(NULL);
+}
+
+void monitor_push_reports() {
+    pthread_t thread_id;
+    if( pthread_create(&thread_id, NULL, monitor_push_reports_handler, NULL) < 0) {
+        if (debug.print) printf("could not create push report thread\n");
+        return;
+    }
+    if (debug.print) puts("pushing report with thread");
+    return;
+}
+
 /**
  * This will notify the client that the connection is established 
  * between the client process and the server thread.
@@ -31,6 +125,25 @@ int monitor_service_new(Environment *env, int client_sock) {
 void *monitor_service_connection_handler(void *tp) {
     char *message;
     MonitorService *t = (MonitorService *)tp;
+    pthread_mutex_lock(&monitorListMutex);
+
+    // add to linked list
+    if (monitorList->count == 0) {
+        monitorList->head = t;
+        monitorList->tail = t;
+        monitorList->count++;
+        if (debug.print) printf("MS-%d added to list at head (%d)\n", t->id, monitorList->count);
+    }
+    else {
+        monitorList->tail->next = t;
+        t->prev = monitorList->tail;
+        monitorList->tail = t;
+        monitorList->count++;
+        if (debug.print) printf("MS-%d added to list (%d)\n", t->id, monitorList->count);
+    }
+
+    pthread_mutex_unlock(&monitorListMutex);
+
      
     // Notify client that a thread has taken the connection
     if (debug.print) printf("Write to sock %d\n",t->client_sock);
@@ -38,7 +151,14 @@ void *monitor_service_connection_handler(void *tp) {
     write(t->client_sock , message , strlen(message));
 
     // wait for client messages
-    monitor_service_await_and_handle_message(t);
+    while(monitor_service_await_and_handle_message(t) == 0) {
+        ;
+    }
+
+    // remove monitor service from push list when it disconnects or fails
+    monitor_service_remove(t);
+
+    pthread_exit(NULL);
 
     return NULL;
 }
@@ -47,7 +167,7 @@ void *monitor_service_connection_handler(void *tp) {
  * This handles incoming communications from a client socket for 
  * an individual client thread.
  */
-void monitor_service_await_and_handle_message(MonitorService *t) {
+int monitor_service_await_and_handle_message(MonitorService *t) {
     char *message;
     int recvSize;
     char recvBuff[1025];
@@ -62,28 +182,42 @@ void monitor_service_await_and_handle_message(MonitorService *t) {
         // Client has disconnected
         if (debug.print) printf("Client disconnect\n");
         fflush(stdout);
-        pthread_exit(NULL);
+        return -1;
     }
     else if (recvSize < 0) {
         // Error reading message
         if (debug.print) printf("ERROR reading from socket\n");
-        pthread_exit(NULL);
+        return -1;
     }
     else {
         // Valid message from client
         if (debug.print) printf("Message from client: %s\n",recvBuff);
+        // limit recvBuff size to 6, to eliminate duplicate "reportreport" commands
+        strncpy(recvBuff, recvBuff, 5);
+        recvBuff[6] = '\0';
+        if (debug.print) printf("Message from client clean: %s\n",recvBuff);
         if( strcmp(recvBuff,"report") == 0 ) {
             message = "report data";
+            if (debug.print) printf("lock ready mutex\n");
+            // message indicates that the monitor is ready to receive
+            pthread_mutex_lock(&(t->monitorReadyMutex));
+            if (t->ready == 0) {
+                pthread_cond_signal(&(t->monitorNowReady));
+            }
+            t->ready = 1;
+            pthread_mutex_unlock(&(t->monitorReadyMutex));                
+            if (debug.print) printf("unlock, now ready\n");
+            monitor_push_reports();
+            sleep(monitorPullDelay);
         }
         else {
             message = "unrecognized client command.";
         }
-
-        if (debug.print) printf("Sending message back to client:\n%s\n", message);
-        monitor_service_write_report(t);
-        sleep(1);
-        monitor_service_await_and_handle_message(t);
+        if (debug.print) printf("Message back from monitor client:\n%s\n", message);
+        // monitor_service_write_report(t);
+        sleep(monitorPullDelay);
     }
+    return 0;
 }
 
 void monitor_service_write_report(MonitorService *ms) {
@@ -144,7 +278,7 @@ void monitor_service_write_report(MonitorService *ms) {
         xmlNewChild(producer_node, NULL, BAD_CAST "status", 
             BAD_CAST producer_data);
 
-        sprintf(producer_data, "%d", producers[p]->count);
+        sprintf(producer_data, "%d", producers[p]->resources_produced);
         xmlNewChild(producer_node, NULL, BAD_CAST "count", 
             BAD_CAST producer_data);
     }

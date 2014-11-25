@@ -18,8 +18,14 @@ int report_status(void) {
 int main(int argc, char** argv) {
     debug.print = 1;
 
+
+    consumeDelay = 1;
+    produceDelay = 2;
+    monitorPullDelay = 1;
+
+
     pidx = 0;
-    resourceID = 0;
+    ridx = 0;
 
     ResourceBuffer *rb;
     Environment *env = malloc(sizeof(*env));
@@ -27,11 +33,17 @@ int main(int argc, char** argv) {
     // initialize mutex
     pthread_mutex_init(&bufferMutex, NULL);
     pthread_mutex_init(&consumerListMutex, NULL);
+    pthread_mutex_init(&monitorListMutex, NULL);
+
     pthread_cond_init (&bufferHasRoom, NULL);
 
     // initialize consumersList
     consumerList = malloc(sizeof(*consumerList));
     consumerList->count = 0;
+
+    // initialize monitorList
+    monitorList = malloc(sizeof(*monitorList));
+    monitorList->count = 0;
 
     // initialize buffer
     env->bufferp = resource_buffer_new(3);

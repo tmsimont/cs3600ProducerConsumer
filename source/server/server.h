@@ -12,6 +12,10 @@
 
 #define MAX_PRODUCERS 128
 
+int consumeDelay;
+int produceDelay;
+int monitorPullDelay;
+
 // Resource
 typedef struct _Resource Resource;
 struct _Resource {
@@ -21,7 +25,7 @@ struct _Resource {
     Resource *next;
 };
 Resource *resource_new(int);
-int resourceID;
+int ridx;
 
 // ResourceBuffer
 typedef struct _ResourceBuffer ResourceBuffer;
@@ -104,20 +108,28 @@ typedef struct _MonitorService MonitorService;
 struct _MonitorService {
     Environment* env;
     int client_sock;
+    int ready;
+    int id;
+    pthread_mutex_t monitorReadyMutex;
+    pthread_cond_t monitorNowReady;
     pthread_t thread;
     MonitorService *next;
     MonitorService *prev;
 };
-typedef struct _ConsumerServiceList ConsumerServiceList;
-struct _ConsumerServiceList {
-    ConsumerService *head;
-    ConsumerService *tail;
+typedef struct _MonitorServiceList MonitorServiceList;
+struct _MonitorServiceList {
+    MonitorService *head;
+    MonitorService *tail;
     int count;
     int idx;
 };
 int monitor_service_new(Environment *, int);
-int consumer_service_remove(ConsumerService *);
+int monitor_service_remove(MonitorService *);
 MonitorServiceList *monitorList;
+void monitor_push_reports();
+
+// monitorListMutex
+pthread_mutex_t monitorListMutex;
 
 
 int xml_write_message(int, char *);

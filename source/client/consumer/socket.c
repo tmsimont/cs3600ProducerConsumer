@@ -103,7 +103,8 @@ int consumer_connect_and_consume() {
 		if (strcmp(recvbuf, "handshake:consumer") == 0) {
 			if (debug.print) printf("HANDSHAKE SUCCESS:\nrecvbuf: %s\n", recvbuf);
 			if (debug.print) puts("consuming...");
-			consumer_connection_consume();
+			while(consumer_connection_consume() > 0)
+				;
 		}
 		else {
 			if (debug.print) printf("HANDSHAKE FAIL:\nrecvbuf: %s\n", recvbuf);
@@ -150,7 +151,6 @@ int consumer_connection_consume() {
 		if (debug.print) printf("Bytes received: %d\n", iResult);
 		recvbuf[iResult] = '\0';
 		if (debug.print) printf("recvbuf: %s", recvbuf);
-		consumer_connection_consume();
 	}
 	else if (iResult == 0) {
 		if (debug.print) printf("Connection closed\n");
@@ -159,7 +159,7 @@ int consumer_connection_consume() {
 		if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
 	}
 	
-	return 0;
+	return iResult;
 }
 
 
