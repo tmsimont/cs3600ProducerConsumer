@@ -13,6 +13,15 @@ static void ui_show_settings_dialog(GtkWidget *widget, gpointer data) {
 
 }
 
+static void ui_connect_to_server(GtkWidget *widget, gpointer data) {
+	start_report_thread();
+}
+
+static void ui_add_consumer_process(GtkWidget *widget, gpointer data) {
+	monitor_new_process();
+}
+
+
 int start_ui() {
 	/* Construct a GtkBuilder instance and load our UI description */
 	builder = gtk_builder_new();
@@ -25,14 +34,51 @@ int start_ui() {
 	settingsMenuItem = gtk_builder_get_object(builder, "settingsMenuItem");
 	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_show_settings_dialog), NULL);
 
-	gtk_main();
-}
+	settingsMenuItem = gtk_builder_get_object(builder, "connectToServer");
+	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_connect_to_server), NULL);
 
-int message_buffer(int bufId, char *message) {
+	settingsMenuItem = gtk_builder_get_object(builder, "startConsumer");
+	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_add_consumer_process), NULL);
+
+	gtk_main();
+
+	return 0;
+}
+/*
+int message_buffer_append(int bufId, char *message) {
 	GtkTextIter iter;
 	char namebuf[32];
 	sprintf_s(namebuf, sizeof(namebuf), "textbuffer%d", (bufId + 1));
 	buffers[bufId] = gtk_builder_get_object(builder, namebuf);
 	gtk_text_buffer_get_iter_at_offset(buffers[bufId], &iter, -1);
 	gtk_text_buffer_insert(buffers[bufId], &iter, message, -1);
+}
+*/
+
+// @see: http://stackoverflow.com/questions/26052313/gtk-warning-invalid-text-buffer-iterator-when-writing-to-the-same-text-view-mul
+struct DispatchData {
+	GtkTextBuffer *buffer;
+	char *output_str;
+};
+struct DispatchData *data[3];
+
+static gboolean display_status_textbuffer(struct DispatchData *data)
+{
+	//printf("put: %s\n", data->output_str);
+	gtk_text_buffer_set_text(data->buffer, data->output_str, strlen(data->output_str));
+	g_free(data);
+	return G_SOURCE_REMOVE;
+}
+
+int message_buffer_set(int bufId, char *message) {
+	char namebuf[32];
+	sprintf_s(namebuf, sizeof(namebuf), "textbuffer%d", (bufId + 1));
+	buffers[bufId] = (GtkTextBuffer *)gtk_builder_get_object(builder, namebuf);
+
+	data[bufId] = g_new0(struct DispatchData, 1);
+	data[bufId]->output_str = message;
+	printf("put: %s\n", message);
+	data[bufId]->buffer = buffers[bufId];
+	gdk_threads_add_idle(display_status_textbuffer, data[bufId]);
+	return 0;
 }

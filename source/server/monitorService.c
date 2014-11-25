@@ -1,8 +1,10 @@
 #include "server.h"
+#include <libxml/parser.h>
 
 
-void monitor_service_await_and_handle_message(ConsumerService*);
+void monitor_service_await_and_handle_message(MonitorService*);
 void *monitor_service_connection_handler(void *);
+void monitor_service_write_report(MonitorService *);
 
 /**
  * Create a new ConsumerService struct, and begin the corresponding thread.
@@ -45,7 +47,7 @@ void *monitor_service_connection_handler(void *tp) {
  * This handles incoming communications from a client socket for 
  * an individual client thread.
  */
-void monitor_service_await_and_handle_message(ConsumerService *t) {
+void monitor_service_await_and_handle_message(MonitorService *t) {
     char *message;
     int recvSize;
     char recvBuff[1025];
@@ -71,7 +73,6 @@ void monitor_service_await_and_handle_message(ConsumerService *t) {
         // Valid message from client
         if (debug.print) printf("Message from client: %s\n",recvBuff);
         if( strcmp(recvBuff,"report") == 0 ) {
-            sleep(5);
             message = "report data";
         }
         else {
@@ -79,8 +80,119 @@ void monitor_service_await_and_handle_message(ConsumerService *t) {
         }
 
         if (debug.print) printf("Sending message back to client:\n%s\n", message);
-        xml_write_message(t->client_sock, message);
-        sleep(3);
+        monitor_service_write_report(t);
+        sleep(1);
         monitor_service_await_and_handle_message(t);
     }
+}
+
+void monitor_service_write_report(MonitorService *ms) {
+    xmlNodePtr root_node, consumers_node, producers_node;
+    xmlNodePtr buffer_node, events_node;
+    xmlDocPtr doc;
+    xmlChar *xmlbuff;
+    int buffersize;
+
+    doc = xmlNewDoc(BAD_CAST "1.0");
+    root_node = xmlNewNode(NULL, BAD_CAST "report");
+    xmlDocSetRootElement(doc, root_node);
+
+    // print consumers as XML
+    consumers_node = xmlNewChild(root_node, NULL, BAD_CAST "consumers", NULL);
+    if (consumerList->count == 0) {
+        // no consumers
+    }
+    else {
+        ConsumerService *cs = consumerList->head;
+        while (cs != NULL) {
+            xmlNodePtr consumer;
+            char consumer_data[1024];
+
+            consumer = xmlNewChild(consumers_node, NULL, BAD_CAST "consumer", NULL);
+
+            sprintf(consumer_data, "%d", cs->id);
+            xmlNewChild(consumer, NULL, BAD_CAST "id", 
+                BAD_CAST consumer_data);
+            
+            sprintf(consumer_data, "%d", cs->resources_consumed);
+            xmlNewChild(consumer, NULL, BAD_CAST "resources_consumed", 
+                BAD_CAST consumer_data);
+            
+            sprintf(consumer_data, "%d", cs->status);
+            xmlNewChild(consumer, NULL, BAD_CAST "status", 
+                BAD_CAST consumer_data);
+
+            cs = cs->next;
+        }
+    }
+    
+
+    // print producers as XML
+    producers_node = xmlNewChild(root_node, NULL, BAD_CAST "producers", NULL);
+    int p;
+    for (p = 0; p < pidx; p++) {
+        xmlNodePtr producer_node;
+        char producer_data[1024];
+        
+        producer_node = xmlNewChild(producers_node, NULL, BAD_CAST "producer", NULL);
+        
+        sprintf(producer_data, "%d", producers[p]->id);
+        xmlNewChild(producer_node, NULL, BAD_CAST "id", 
+            BAD_CAST producer_data);
+
+        sprintf(producer_data, "%d", producers[p]->status);
+        xmlNewChild(producer_node, NULL, BAD_CAST "status", 
+            BAD_CAST producer_data);
+
+        sprintf(producer_data, "%d", producers[p]->count);
+        xmlNewChild(producer_node, NULL, BAD_CAST "count", 
+            BAD_CAST producer_data);
+    }
+
+    buffer_node = xmlNewChild(root_node, NULL, BAD_CAST "buffer", NULL);
+
+
+    // print buffer as XML
+    ResourceBuffer *rb;
+    rb = ms->env->bufferp;
+    if (rb->count == 0) {
+        // empty buffer
+    }
+    else {
+        Resource *temp = rb->head;
+        while (temp != NULL) {
+            xmlNodePtr buffer_resource;
+            char resource_data[1024];
+
+            buffer_resource = xmlNewChild(buffer_node, NULL, BAD_CAST "resource", NULL);
+
+            sprintf(resource_data, "%d", temp->id);
+            xmlNewChild(buffer_resource, NULL, BAD_CAST "id", 
+                BAD_CAST resource_data);
+            
+            sprintf(resource_data, "%d", temp->produced_by);
+            xmlNewChild(buffer_resource, NULL, BAD_CAST "producer", 
+                BAD_CAST resource_data);
+
+            temp = temp->next;
+        }
+    }
+
+    events_node = xmlNewChild(root_node, NULL, BAD_CAST "events", NULL);
+
+
+    /*
+     * Dump the document to a buffer and print it
+     * for demonstration purposes.
+     */
+    xmlDocDumpFormatMemory(doc, &xmlbuff, &buffersize, 1);
+    write(ms->client_sock, xmlbuff, buffersize);
+    // if (debug.print) printf("wrote to socket:\n%s", (char *) xmlbuff);
+
+    /*
+     * Free associated memory.
+     */
+    xmlFree(xmlbuff);
+    xmlFreeDoc(doc);
+
 }

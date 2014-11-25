@@ -26,7 +26,12 @@ int main(int argc, char** argv) {
 
     // initialize mutex
     pthread_mutex_init(&bufferMutex, NULL);
+    pthread_mutex_init(&consumerListMutex, NULL);
     pthread_cond_init (&bufferHasRoom, NULL);
+
+    // initialize consumersList
+    consumerList = malloc(sizeof(*consumerList));
+    consumerList->count = 0;
 
     // initialize buffer
     env->bufferp = resource_buffer_new(3);

@@ -6,7 +6,7 @@
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
 
-#define DEFAULT_BUFLEN 512
+#define DEFAULT_BUFLEN 16384
 
 int monitor_connection_send_string(char *);
 int monitor_connection_monitor();
@@ -90,7 +90,6 @@ int monitor_connect_and_monitor() {
 		if (debug.print) printf("connect socket valid\n");
 	}
 
-
 	// Receive the connection handshake message
 	if (debug.print) printf("Shaking hands...\n");
 	monitor_connection_send_string("handshake:monitor");
@@ -132,38 +131,38 @@ int monitor_connection_send_string(char *sendbuf) {
 		if (debug.print) printf("send ok\n");
 	}
 	if (debug.print) printf("Bytes Sent: %ld\n", iResult);
+	return 0;
 }
 
 int monitor_connection_monitor() {
 	int iResult;
-
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
 
-	char *sendbuf = "report";
-	monitor_connection_send_string(sendbuf);
+	do {
+		char *sendbuf = "report";
+		monitor_connection_send_string(sendbuf);
 
-	if (debug.print) printf("Receiving...\n");
-	// Receive a message
-	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-	if (iResult > 0) {
-		if (debug.print) printf("Bytes received: %d\n", iResult);
-		recvbuf[iResult] = '\0';
-		if (debug.print) printf("recvbuf: %s", recvbuf);
-		if (debug.console_report) printf("%s\n", recvbuf);
-		recvbuf[iResult + 1] = '\n';
-		message_buffer(0, recvbuf);
-		xml_parse_message(recvbuf);
-		monitor_connection_monitor();
-	}
-	else if (iResult == 0) {
-		if (debug.print) printf("Connection closed\n");
-	}
-	else {
-		if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
-	}
+		if (debug.print) printf("Receiving...\n");
+		// Receive a message
+		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+		if (iResult > 0) {
+			if (debug.print) printf("Bytes received: %d\n", iResult);
+			recvbuf[iResult] = '\0';
+			if (debug.print) printf("recvbuf: %s", recvbuf);
+			if (debug.console_report) printf("%s\n", recvbuf);
+			recvbuf[iResult + 1] = '\n';
+			monitor_xml_parse_report(recvbuf);
+		}
+		else if (iResult == 0) {
+			if (debug.print) printf("Connection closed\n");
+		}
+		else {
+			if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
+		}
+	} while (iResult > 0);
 
-	return 0;
+	return iResult;
 }
 
 

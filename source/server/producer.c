@@ -14,18 +14,13 @@ pthread_attr_t attr;
 
 int bufferSim;
 
-struct _Producer {
-    int id;
-    pthread_t thread;
-    ResourceBuffer *bufferp;
-    int status;
-};
 
 
 void *producer_produce(void *pi) {
     Producer *p = (Producer *)pi;
 
     while(1) {
+        p->status = 1;
 
         pthread_mutex_lock(&bufferMutex);
 
@@ -37,10 +32,13 @@ void *producer_produce(void *pi) {
         }
 
         if(debug.print) printf("producer %d produce to buffer\n", p->id);
+        p->status = 2;
         resource_buffer_enqueue(p->bufferp, resource_new(p->id));
+        p->resources_produced++;
         resource_buffer_print(p->bufferp);
         sleep(p->id * 2);
 
+        p->status = 0;
         pthread_mutex_unlock(&bufferMutex);
 
     }
@@ -66,6 +64,8 @@ Producer *producer_new(ResourceBuffer *rb) {
     // set Producer struct properties and record producer to global array
     p->id = pidx;
     p->bufferp = rb;
+    p->resources_produced = 0;
+    p->status = 0;
     producers[pidx] = p;
     pidx++;
 

@@ -41,6 +41,13 @@ pthread_cond_t bufferHasRoom;
 
 // Producer
 typedef struct _Producer Producer;
+struct _Producer {
+    int id;
+    int resources_produced;
+    pthread_t thread;
+    ResourceBuffer *bufferp;
+    int status;
+};
 Producer *producers[MAX_PRODUCERS];
 int pidx;
 Producer *producer_new(ResourceBuffer*);
@@ -65,21 +72,52 @@ struct {
 
 
 // helper struct for individual consumer service threads
-typedef struct {
+typedef struct _ConsumerService ConsumerService;
+struct _ConsumerService {
+    int id;
     Environment* env;
     int client_sock;
     pthread_t thread;
-} ConsumerService;
-int consumer_service_new(Environment *, int);
+    int resources_consumed;
+    int status;
+    ConsumerService *next;
+    ConsumerService *prev;
+};
+typedef struct _ConsumerServiceList ConsumerServiceList;
+struct _ConsumerServiceList {
+    ConsumerService *head;
+    ConsumerService *tail;
+    int count;
+    int idx;
+};
+ConsumerServiceList *consumerList;
+int consumer_service_new(Environment *, int client_socket);
+int consumer_service_remove(ConsumerService *);
 int consumer_service_get_resource(Environment *, Resource **);
+
+// consumerListMutext
+pthread_mutex_t consumerListMutex;
 
 
 // helper struct for individual consumer service threads
-typedef struct {
+typedef struct _MonitorService MonitorService;
+struct _MonitorService {
     Environment* env;
     int client_sock;
     pthread_t thread;
-} MonitorService;
+    MonitorService *next;
+    MonitorService *prev;
+};
+typedef struct _ConsumerServiceList ConsumerServiceList;
+struct _ConsumerServiceList {
+    ConsumerService *head;
+    ConsumerService *tail;
+    int count;
+    int idx;
+};
 int monitor_service_new(Environment *, int);
+int consumer_service_remove(ConsumerService *);
+MonitorServiceList *monitorList;
+
 
 int xml_write_message(int, char *);
