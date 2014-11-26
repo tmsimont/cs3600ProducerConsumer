@@ -13,6 +13,13 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+// producer states
+char *producer_states[] = { "sleep", "producing", "export", "waiting" };
+
+// consumer states
+char *consumer_states[] = { "sleep", "hungry", "consuming" };
+
+
 DWORD WINAPI reportThread(LPVOID lpParam);
 
 // Character buffers used during XML parsing
@@ -148,7 +155,7 @@ void monitor_xml_parse_consumer(xmlNode * a_node) {
 		return;
 	}
 	sprintf_s(consumer_line, sizeof(consumer_line), "consumer %s:\n   resources consumed:%s\n   status: %s\n-----------\n",
-		c->id, c->resources_consumed, c->status);
+		c->id, c->resources_consumed, consumer_states[atoi(c->status)]);
 	xmlFree(c->id);
 	xmlFree(c->resources_consumed);
 	xmlFree(c->status);
@@ -220,7 +227,7 @@ void monitor_xml_parse_producer(xmlNode * a_node) {
 		return;
 	}
 	sprintf_s(producer_line, sizeof(producer_line), "producer %s:\n   resources produced:%s\n   status: %s\n-----------\n",
-		c->id, c->count, c->status);
+		c->id, c->count, producer_states[atoi(c->status)]);
 	xmlFree(c->id);
 	xmlFree(c->count);
 	xmlFree(c->status);

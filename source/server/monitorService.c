@@ -44,7 +44,9 @@ int monitor_service_new(Environment *env, int client_sock) {
 
 /**
  * Remove a MonitorService from the global linked list of MonitorService
- * structs. This should be called when a Monitor disconnects
+ * structs. This should be called when a Monitor disconnects from the server.
+ * The process of removing the monitor is delicate. Access to the list must be
+ * locked, and so must access to the individual MonitorService.
  */
 int monitor_service_remove(MonitorService *ms) {
 
@@ -129,11 +131,25 @@ int monitor_service_remove(MonitorService *ms) {
 }
 
 /**
- * Thread handler for individual monitorService release.
- * This is used to prevent the monitor_push_reports_handler thread from
- * blocking the monitorListMutex while traversing a list of active
- * MonitorServices and encountering an individual service that is
- * waiting for the ready signal.
+ * Thread handler for individual monitorService push report call.
+ * 
+ * There may be numerous MonitorService instances. These are tracked
+ * in a linked list. That linked list may be altered my several threads.
+ * So may the individual MonitorService instances. We need to protect both 
+ * the linked list as a whole, and each individual service with mutex locks.
+ *
+ * In order to prevent deadlock, one thread acquires the lock on the list,
+ * and as it traverses the list it will dispatch a new thread for each item
+ * in the least. These child threads will then acquire the lock on the individual
+ * item, and might have to wait for the signal that the individual item is 
+ * ready. If this were handled by the parent, which is traversing the list, then
+ * the mutex lock on the list would not be released in a timely fashion.
+ *
+ * Therefore, this function is used to prevent the monitor_push_reports_handler
+ * caller thread from blocking the monitorListMutex while traversing 
+ * the linked list of active MonitorServices.
+ *
+ * @see monitor_push_reports_handler()
  */
 void *monitor_push_reports_handler_for_ms(void *msp) {
     MonitorService *ms = (MonitorService *)msp;

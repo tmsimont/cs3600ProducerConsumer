@@ -8,7 +8,7 @@
 
 #include "server.h"
 
-enum { SLEEPING, PRODUCING, WAITING };
+enum { SLEEP, PRODUCING, EXPORT, WAITING };
 
 /**
  * Primary producer loop.
@@ -20,6 +20,9 @@ enum { SLEEPING, PRODUCING, WAITING };
 void *producer_produce(void *pi) {
     Producer *p = (Producer *)pi;
     while(1) {
+        // time delay between productions
+        p->status = SLEEP;
+        sleep(producerRest);
         
         // acquire buffer mutex
         if(debug.print) printf("producer %d acquiring bufferMutex\n", p->id);
@@ -37,7 +40,7 @@ void *producer_produce(void *pi) {
 
         // enqueue new resource to buffer
         if(debug.print) printf("producer %d produce to buffer\n", p->id);
-        p->status = PRODUCING;
+        p->status = EXPORT;
         resource_buffer_enqueue(p->bufferp, resource_new(p->id));
         p->resources_produced++;
         if(debug.print) resource_buffer_print(p->bufferp);
@@ -55,7 +58,7 @@ void *producer_produce(void *pi) {
         if(debug.print) printf("producer %d released bufferMutex\n", p->id);
         
         // wait to produce more for produceDelay seconds
-        p->status = SLEEPING;
+        p->status = PRODUCING;
         sleep(produceDelay);
     }
     free(p);
@@ -75,7 +78,7 @@ Producer *producer_new(ResourceBuffer *rb) {
     p->id = pidx;
     p->bufferp = rb;
     p->resources_produced = 0;
-    p->status = SLEEPING;
+    p->status = PRODUCING;
     producers[pidx] = p;
     pidx++;
 

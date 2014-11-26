@@ -17,7 +17,9 @@
 
 // behavioral settings
 int consumeDelay;
+int consumerRest;
 int produceDelay;
+int producerRest;
 int bufferSize;
 int numProducers;
 

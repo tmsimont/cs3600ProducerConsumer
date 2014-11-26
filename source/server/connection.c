@@ -57,11 +57,14 @@ int server_listen(Environment *env) {
     printf("Server process listening on port %d\n"
         "Buffer size:%8d\n"
         "Producers:%10d\n"
-        "Consumer delay:%5d\n"
-        "Production delay:%3d\n"
+        "Consumption time:%3d\n"
+        "Consumer rest:%6d\n"
+        "Production time:%4d\n"
+        "Producer rest:%6d\n"
         "Debugging:%10d\n",
         APPLICATION_PORT, bufferSize, numProducers,
-        consumeDelay, produceDelay, debug.print);
+        consumeDelay, consumerRest, produceDelay, producerRest,
+        debug.print);
 
     // accept incoming connections forever (until error occurs)
     int client_sock;

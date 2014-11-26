@@ -214,7 +214,8 @@ int consumer_service_await_and_handle_message(ConsumerService *t) {
     int recvSize;
     char recvBuff[1025];
 
-    t->status = SLEEPING;
+    // simulate non-ravenousness
+    sleep(consumerRest);
 
     // clear recvBuff
     memset(recvBuff, '\0', sizeof(recvBuff));
@@ -271,8 +272,13 @@ int consumer_service_await_and_handle_message(ConsumerService *t) {
                 // push reports out to listening monitors
                 monitor_push_reports();
 
-                // sleep for given consumer delay
+                // sleep for given consumer delay to simulate consumption time
                 sleep(consumeDelay);
+
+                t->status = SLEEPING;
+
+                // push reports out to listening monitors
+                monitor_push_reports();
             }
             else {
                 /** 

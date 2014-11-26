@@ -27,7 +27,9 @@ int main(int argc, char** argv) {
     bufferSize = 3;
     numProducers = 5;
     consumeDelay = 1;
+    consumerRest = 1;
     produceDelay = 2;
+    producerRest = 1;
 
     // allow behavior vars to be overridden with command line args
     printf ("args: %d\n", argc);
@@ -49,9 +51,15 @@ int main(int argc, char** argv) {
                     consumeDelay = atoi(argv[i]);
                     break;
                 case 4:
-                    produceDelay = atoi(argv[i]);
+                    consumerRest = atoi(argv[i]);
                     break;
                 case 5:
+                    produceDelay = atoi(argv[i]);
+                    break;
+                case 6:
+                    producerRest = atoi(argv[i]);
+                    break;
+                case 7:
                     debug.print = atoi(argv[i]);
                     break;
             }
