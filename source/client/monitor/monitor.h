@@ -8,6 +8,7 @@
 int monitor_connect_and_monitor();
 int monitor_connection_shutdown();
 void monitor_new_process();
+int monitor_connection_send_string(char *);
 
 // Report thread
 DWORD   reportThreadID;
@@ -21,8 +22,7 @@ struct _reportData {
 PReportData pReportData;
 
 
-HANDLE    reportReadyMutex;
-int reportReady;
+HANDLE guiUpdateEvent;
 
 
 int start_ui();

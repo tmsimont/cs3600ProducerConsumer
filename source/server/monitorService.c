@@ -26,6 +26,9 @@ int monitor_service_new(Environment *env, int client_sock) {
     t->client_sock = client_sock;
     t->env = env;
     t->ready = 0;
+    t->deleted = 0;
+    t->waiting = 0;
+    t->id = monitorList->idx++;
     pthread_mutex_init(&(t->monitorReadyMutex), NULL);
     pthread_cond_init(&(t->monitorNowReady), NULL);
     if (debug.print) printf("monitor service struct ready\n");
@@ -44,6 +47,24 @@ int monitor_service_new(Environment *env, int client_sock) {
  * structs. This should be called when a Monitor disconnects
  */
 int monitor_service_remove(MonitorService *ms) {
+
+    // acquire individual MonitorService ready flag mutex
+    pthread_mutex_lock(&(ms->monitorReadyMutex));
+        ms->deleted = 1;
+        // another thread is waiting for this ms to be ready, release that
+        // thread and don't delete this yet.
+        // @see: monitor_push_reports_handler_for_ms()
+        if (ms->waiting == 1) {
+            // unblock any waiting push report calls
+            if (debug.print) printf("MS waiting cant delete.");
+            pthread_cond_signal(&(ms->monitorNowReady));
+            ms->ready = 1;
+            pthread_mutex_unlock(&(ms->monitorReadyMutex));
+            return -1;
+        }
+    // release MonitorService ready flag mutex
+    pthread_mutex_unlock(&(ms->monitorReadyMutex));
+
 
     // acquire list mutex
     pthread_mutex_lock(&monitorListMutex);
@@ -108,6 +129,50 @@ int monitor_service_remove(MonitorService *ms) {
 }
 
 /**
+ * Thread handler for individual monitorService release.
+ * This is used to prevent the monitor_push_reports_handler thread from
+ * blocking the monitorListMutex while traversing a list of active
+ * MonitorServices and encountering an individual service that is
+ * waiting for the ready signal.
+ */
+void *monitor_push_reports_handler_for_ms(void *msp) {
+    MonitorService *ms = (MonitorService *)msp;
+
+    // acquire individual MonitorService ready flag mutex
+    pthread_mutex_lock(&(ms->monitorReadyMutex));
+    if (ms->ready == 0 && ms->deleted == 0) {
+        // wait until the individual monitor is ready
+        if (debug.print) printf("wait for MS-%d\n",ms->id);
+        ms->waiting = 1;
+        pthread_cond_wait(&(ms->monitorNowReady), &(ms->monitorReadyMutex));
+    }
+
+    // this thread is not waiting for the monitorNowReady signal
+    ms->waiting = 0;
+
+    // mark the monitor as not ready, and send report data
+    ms->ready = 0;
+    if (ms->deleted == 0) {
+        if (debug.print) printf("MS-%d not deleted.\n",ms->id);
+        monitor_service_write_report(ms);
+    }
+    else {
+        // this was flagged for delete, but was not deleted
+        // because this thread was waiting for this MontiorService.
+        // now it's gone, so queue the removal
+        // @see: monitor_service_remove()
+        if (debug.print) printf("MS-%d flag for delete.\n", ms->id);
+        pthread_mutex_unlock(&(ms->monitorReadyMutex));
+        monitor_service_remove(ms);
+        pthread_exit(NULL);
+    }
+    // release MonitorService ready flag mutex
+    pthread_mutex_unlock(&(ms->monitorReadyMutex));
+
+    pthread_exit(NULL);
+}
+
+/**
  * This will push "report data" out to all connected Monitor clients and 
  * immediately exit the calling thread. This is called by threads created
  * in monitor_push_reports(), which allows "report data" to be pushed
@@ -130,21 +195,14 @@ void *monitor_push_reports_handler(void *tp) {
         MonitorService *ms = monitorList->head;
         while (ms != NULL) {
             if (debug.print) printf("lock for push\n");
-            
-            // acquire individual MonitorService ready flag mutex
-            pthread_mutex_lock(&(ms->monitorReadyMutex));
-            if (ms->ready != 1) {
-                // wait until the individual monitor is ready
-                if (debug.print) printf("wait for monitor\n");
-                pthread_cond_wait(&(ms->monitorNowReady), &(ms->monitorReadyMutex));
+
+            // use yet another thread so we can quickly release the monitorListMutex
+            pthread_t thread_id;
+            if( pthread_create(&thread_id, NULL, monitor_push_reports_handler_for_ms, (void*)ms) < 0) {
+                if (debug.print) printf("could not create push report thread ms\n");
+                return;
             }
-
-            // mark the monitor as not ready, and send report data
-            ms->ready = 0;
-            monitor_service_write_report(ms);
-
-            // release MonitorService ready flag mutex
-            pthread_mutex_unlock(&(ms->monitorReadyMutex));
+            if (debug.print) printf("pushing report for MS-%d\n",ms->id);
 
             ms = ms->next;
         }

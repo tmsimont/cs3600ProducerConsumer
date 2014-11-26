@@ -18,7 +18,10 @@
 // behavioral settings
 int consumeDelay;
 int produceDelay;
-int monitorPullDelay;
+int bufferSize;
+int numProducers;
+
+int reset();
 
 
 // Resource data
@@ -41,6 +44,7 @@ struct _ResourceBuffer {
     Resource *head;
 };
 ResourceBuffer *resource_buffer_new(int);
+ResourceBuffer *globalResourceBuffer;
 void resource_buffer_test(ResourceBuffer*);
 void resource_buffer_print(ResourceBuffer*);
 int initialize_producers(ResourceBuffer*, int);
@@ -72,6 +76,7 @@ struct _environment {
     int socket_desc;
     ResourceBuffer *bufferp;
 };
+Environment *env;
 
 
 // ConsumerService thread data
@@ -112,6 +117,8 @@ struct _MonitorService {
     int client_sock;
     int ready;
     int id;
+    int deleted;
+    int waiting;
     pthread_mutex_t monitorReadyMutex;
     pthread_cond_t monitorNowReady;
     pthread_t thread;

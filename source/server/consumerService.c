@@ -106,6 +106,8 @@ int consumer_service_remove(ConsumerService *cs) {
     // release list mutex
     pthread_mutex_unlock(&consumerListMutex);
 
+    // let monitors know about the removal
+    monitor_push_reports();
     
 }
 

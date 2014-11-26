@@ -43,7 +43,7 @@ int server_listen(Environment *env) {
     // bind the socket
     if(bind(env->socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) {
         //print the error message
-        perror("bind failed. Error");
+        perror("Error");
         return 1;
     }
     if (debug.print) puts("bind done");
@@ -51,6 +51,17 @@ int server_listen(Environment *env) {
     // listen
     listen(env->socket_desc, 3);
     if (debug.print) puts("Waiting for incoming connections...");
+
+
+    // let user know we have a connection
+    printf("Server process listening on port %d\n"
+        "Buffer size:%8d\n"
+        "Producers:%10d\n"
+        "Consumer delay:%5d\n"
+        "Production delay:%3d\n"
+        "Debugging:%10d\n",
+        APPLICATION_PORT, bufferSize, numProducers,
+        consumeDelay, produceDelay, debug.print);
 
     // accept incoming connections forever (until error occurs)
     int client_sock;

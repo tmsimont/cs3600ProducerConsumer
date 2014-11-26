@@ -23,7 +23,6 @@ SOCKET ConnectSocket = INVALID_SOCKET;
 #define DEFAULT_BUFLEN 16384
 
 // stubs for communication functions
-int monitor_connection_send_string(char *);
 int monitor_connection_monitor();
 
 /**
@@ -127,9 +126,6 @@ int monitor_connect_and_monitor() {
 			if (debug.print) printf("HANDSHAKE SUCCESS:\nrecvbuf: %s\n", recvbuf);
 			if (debug.print) puts("monitoring...");
 
-			// indicate internally that report is ready
-			reportReady = 1;
-
 			// start receive data loop
 			monitor_connection_monitor();
 		}
@@ -177,65 +173,53 @@ int monitor_connection_monitor() {
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
 	DWORD waitResult;
+	guiUpdateEvent = CreateEvent(NULL, TRUE, FALSE, TEXT("guiUpdateEvent"));
 
 	do {
-		printf("socket wait\n");
-		waitResult = WaitForSingleObject(reportReadyMutex, INFINITE);
-		switch (waitResult) {
-			// The thread got ownership of the mutex
-			case WAIT_OBJECT_0:
-				__try {
-					printf("socket got\n");
-					if (reportReady != 0) {
-						reportReady = 0;
+		// send "report" signal to the ConnectSocket
+		char *sendbuf = "report";
+		monitor_connection_send_string(sendbuf);
 
-						// send "report" signal to the ConnectSocket
-						char *sendbuf = "report";
-						monitor_connection_send_string(sendbuf);
+		// Receive the "report data" and parse it
+		if (debug.print) printf("Receiving...\n");
+		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+		if (iResult > 0) {
+			if (debug.print) printf("Bytes received: %d\n", iResult);
 
+			// null terminate the buffer
+			recvbuf[iResult] = '\0';
+			if (debug.print) printf("recvbuf: %s", recvbuf);
+			if (debug.console_report) printf("%s\n", recvbuf);
 
-						// Receive the "report data" and parse it
-						if (debug.print) printf("Receiving...\n");
-						iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-						if (iResult > 0) {
-							if (debug.print) printf("Bytes received: %d\n", iResult);
+			// add an endline character
+			recvbuf[iResult + 1] = '\n';
 
-							// null terminate the buffer
-							recvbuf[iResult] = '\0';
-							if (debug.print) printf("recvbuf: %s", recvbuf);
-							if (debug.console_report) printf("%s\n", recvbuf);
+			printf("parse report\n");
 
-							// add an endline character
-							recvbuf[iResult + 1] = '\n';
+			// parse the report
+			monitor_xml_parse_report(recvbuf);
 
-							// parse the report
-							monitor_xml_parse_report(recvbuf);
+			// wait for the GUI to be updated
+			printf("waiting for signal...\n");
+			waitResult = WaitForSingleObject(guiUpdateEvent, INFINITE);
+			switch (waitResult) {
+				case WAIT_OBJECT_0:
+					// reset the event and reset the loop
+					printf("reset signal.\n");
+					ResetEvent(guiUpdateEvent);
+					break;
+				default:
+					printf("Wait error (%d)\n", GetLastError());
+					return 0;
+			}
 
-							Sleep(100);
-						}
-						else if (iResult == 0) {
-							if (debug.print) printf("Connection closed\n");
-						}
-						else {
-							if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
-						}
-					}
-				}
-				__finally {
-					printf("socket release\n");
-					// Release ownership of the mutex object
-					if (!ReleaseMutex(reportReadyMutex)) {
-						printf("mutex error1:%d\n", GetLastError());
-						// Handle error.
-					}
-				}
-				break;
-
-			// The thread got ownership of an abandoned mutex
-			case WAIT_ABANDONED:
-				return FALSE;
 		}
-
+		else if (iResult == 0) {
+			if (debug.print) printf("Connection closed\n");
+		}
+		else {
+			if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
+		}
 	} while (iResult > 0);
 
 	return iResult;
@@ -247,6 +231,8 @@ int monitor_connection_monitor() {
  */
 int monitor_connection_shutdown() {
 	int iResult;
+
+	CloseHandle(guiUpdateEvent);
 
 	// shutdown the connection for sending since no more data will be sent
 	// the client can still use the ConnectSocket for receiving data

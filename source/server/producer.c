@@ -58,7 +58,7 @@ void *producer_produce(void *pi) {
         p->status = SLEEPING;
         sleep(produceDelay);
     }
-
+    free(p);
     pthread_exit(NULL);
 }
 

@@ -15,11 +15,10 @@ int main(int argc, char *argv[]) {
 	debug.print = 0;
 	debug.console_report = 0;
 
-	reportReady = 0;
-	reportReadyMutex = CreateMutex( NULL, FALSE, NULL);
-
 	gtk_init(&argc, &argv);
 	start_ui();	
+
+	monitor_connection_shutdown();
 	monitor_shutdown();
 	report_shutdown();
 }
@@ -52,7 +51,7 @@ void monitor_new_process() {
 void monitor_shutdown() {
 	while (procIndex >= 0){
 		// Wait until child process exits.
-		WaitForSingleObject(pi[procIndex].hProcess, INFINITE);
+		WaitForSingleObject(pi[procIndex].hProcess, 1000);
 
 		// Close process and thread handles. 
 		CloseHandle(pi[procIndex].hProcess);

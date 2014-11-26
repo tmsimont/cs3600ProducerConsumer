@@ -146,6 +146,7 @@ int consumer_connection_send_string(char *sendbuf) {
 		if (debug.print) printf("send ok\n");
 	}
 	if (debug.print) printf("Bytes Sent: %ld\n", iResult);
+	return 0;
 }
 
 int consumer_connection_consume() {
@@ -164,6 +165,7 @@ int consumer_connection_consume() {
 		if (debug.print) printf("Bytes received: %d\n", iResult);
 		recvbuf[iResult] = '\0';
 		if (debug.print) printf("recvbuf: %s", recvbuf);
+		if (PRINT_CONSUMED) printf("%s\n", recvbuf);
 	}
 	else if (iResult == 0) {
 		if (debug.print) printf("Connection closed\n");

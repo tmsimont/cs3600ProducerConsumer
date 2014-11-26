@@ -12,12 +12,15 @@
 GtkTextBuffer *buffers[3];
 
 GtkBuilder *builder;
-GObject *window, *settingsDialog, *settingsMenuItem;
+GObject *window, 
+	*settingsDialog, 
+	*settingsMenuItem;
 GtkWidget *console1, *console2, *console3;
 GtkWidget *hbox1;
 
 /**
  * Button callback to display settings dialog box
+ * NOTE: This has been abandoned
  */
 static void ui_show_settings_dialog(GtkWidget *widget, gpointer data) {
 	settingsDialog = gtk_builder_get_object(builder, "settingsDialog");
@@ -33,8 +36,8 @@ static void ui_connect_to_server(GtkWidget *widget, gpointer data) {
 }
 
 /**
- * Button callback to spawn a new consumer process
- */
+* Button callback to spawn a new consumer process
+*/
 static void ui_add_consumer_process(GtkWidget *widget, gpointer data) {
 	monitor_new_process();
 }
@@ -50,8 +53,11 @@ int start_ui() {
 	window = gtk_builder_get_object(builder, "window1");
 	g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
+	// abandoned settings menu
+	/*
 	settingsMenuItem = gtk_builder_get_object(builder, "settingsMenuItem");
 	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_show_settings_dialog), NULL);
+	*/
 
 	settingsMenuItem = gtk_builder_get_object(builder, "connectToServer");
 	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_connect_to_server), NULL);
@@ -80,36 +86,14 @@ struct DispatchData {
 };
 struct DispatchData *data;
 static gboolean display_status_textbuffer(struct DispatchData *data) {
-
-	DWORD waitResult;
-	printf("ui wait\n");
-	waitResult = WaitForSingleObject(reportReadyMutex, INFINITE);
-	switch (waitResult) {
-		// The thread got ownership of the mutex
-		case WAIT_OBJECT_0:
-			__try {
-				printf("ui got\n");
-				gtk_text_buffer_set_text(data->buffer0, data->output_str_c, strlen(data->output_str_c));
-				gtk_text_buffer_set_text(data->buffer1, data->output_str_b, strlen(data->output_str_b));
-				gtk_text_buffer_set_text(data->buffer2, data->output_str_p, strlen(data->output_str_p));
-				g_free(data);
-				reportReady = 1;
-			}
-
-			__finally {
-				printf("ui release\n");
-				// Release ownership of the mutex object
-				if (!ReleaseMutex(reportReadyMutex))	{
-					printf("mutex error2\n%d\n", GetLastError());
-				}
-			}
-			break;
-		// The thread got ownership of an abandoned mutex
-		case WAIT_ABANDONED:
-			printf("mutex error3\n%d\n", GetLastError());
-			return FALSE;
+	gtk_text_buffer_set_text(data->buffer0, data->output_str_c, strlen(data->output_str_c));
+	gtk_text_buffer_set_text(data->buffer1, data->output_str_b, strlen(data->output_str_b));
+	gtk_text_buffer_set_text(data->buffer2, data->output_str_p, strlen(data->output_str_p));
+	g_free(data);
+	printf("sending signal\n");
+	if (!SetEvent(guiUpdateEvent)) {
+		printf("SetEvent failed (%d)\n", GetLastError());
 	}
-
 	return G_SOURCE_REMOVE;
 }
 
@@ -130,6 +114,7 @@ int viewport_update_panes(char *consumer, char *buffer, char *producer) {
 	data->buffer1 = buffers[1];
 	data->buffer2 = buffers[2];
 
+	printf("calling update\n");
 	gdk_threads_add_idle(display_status_textbuffer, data);
 	return 0;
 }

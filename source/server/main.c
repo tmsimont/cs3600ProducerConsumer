@@ -8,24 +8,62 @@
 
 #include "server.h"
 
+int start() {
+    // initialize buffer
+    globalResourceBuffer = resource_buffer_new(bufferSize);
+    env->bufferp = globalResourceBuffer;
+
+    // initialize producers
+    initialize_producers(env->bufferp, numProducers);
+}
+
 /**
  * Initialize program and begin listening for client requests 
  */
 int main(int argc, char** argv) {
-    debug.print = 1;
+    debug.print = 0;
 
     // set behavioral variables
+    bufferSize = 3;
+    numProducers = 5;
     consumeDelay = 1;
     produceDelay = 2;
-    monitorPullDelay = 1;
+
+    // allow behavior vars to be overridden with command line args
+    printf ("args: %d\n", argc);
+    int i;
+    for (i = 0; i < argc; i++) {
+        printf ("arg: %s\n", argv[i]);
+    }
+    if (argc > 1) {
+        int i;
+        for (i = 1; i < argc; i++) {
+            switch (i) {
+                case 1:
+                    bufferSize = atoi(argv[i]);
+                    break;
+                case 2:
+                    numProducers = atoi(argv[i]);
+                    break;
+                case 3:
+                    consumeDelay = atoi(argv[i]);
+                    break;
+                case 4:
+                    produceDelay = atoi(argv[i]);
+                    break;
+                case 5:
+                    debug.print = atoi(argv[i]);
+                    break;
+            }
+        }
+    }
 
     // initialize global producer and resource indices
     pidx = 0;
     ridx = 0;
 
     // initialize resource buffer and environment structures
-    ResourceBuffer *rb;
-    Environment *env = malloc(sizeof(*env));
+    env = malloc(sizeof(*env));
 
     // initialize global mutexes
     pthread_mutex_init(&bufferMutex, NULL);
@@ -42,11 +80,8 @@ int main(int argc, char** argv) {
     monitorList = malloc(sizeof(*monitorList));
     monitorList->count = 0;
 
-    // initialize buffer
-    env->bufferp = resource_buffer_new(3);
-
-    // initialize producers
-    initialize_producers(env->bufferp, 5);
+    // begin producer/buffer threads
+    start();
 
     // wait for connections
     server_listen(env);
