@@ -21,9 +21,12 @@ struct _reportData {
 PReportData pReportData;
 
 
+HANDLE    reportReadyMutex;
+int reportReady;
+
 
 int start_ui();
-int message_buffer_set(int, char *);
+int viewport_update_panes(char *, char *, char *);
 int monitor_xml_write_message(int, char *);
 int monitor_xml_parse_report(char *);
 

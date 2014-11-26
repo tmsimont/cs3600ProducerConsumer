@@ -1,19 +1,38 @@
+/**
+ * File: socket.c
+ * Author: Trevor Simonton
+ * 
+ * The socket.c file provides Winsock2 integration for the 
+ * Monitor process. This connects the Monitor to the Linux server
+ * and handles communication to and from the server.
+ *
+ * This code was derived from examples posted on microsoft.com
+ * @see: http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
+ */
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "monitor.h"
 
+// Winsock
 #pragma comment(lib, "Ws2_32.lib")
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
 
+// default length for communication char buffers
 #define DEFAULT_BUFLEN 16384
 
+// stubs for communication functions
 int monitor_connection_send_string(char *);
 int monitor_connection_monitor();
 
 /**
-* http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
-*/
+ * This is the main function of this "class."
+ * This initializes Winsock, and establishes the connection with 
+ * the Linux server. Once the connection is made, this sends
+ * the "handshake:monitor" signal that initializes the server
+ * thread
+ */
 int monitor_connect_and_monitor() {
 	int iResult;
 	struct addrinfo
@@ -31,6 +50,7 @@ int monitor_connect_and_monitor() {
 		if (debug.print) printf("winsock initialized\n");
 	}
 
+	// prepare the address info
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
@@ -53,7 +73,6 @@ int monitor_connect_and_monitor() {
 
 	// Create a SOCKET for connecting to server
 	ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-
 	if (ConnectSocket == INVALID_SOCKET) {
 		if (debug.print) printf("Error at socket(): %ld\n", WSAGetLastError());
 		freeaddrinfo(result);
@@ -74,9 +93,11 @@ int monitor_connect_and_monitor() {
 		if (debug.print) printf("iresult connect OK\n");
 	}
 
+
 	// @todo: see microsoft comment below
 	// Should really try the next address returned by getaddrinfo
 	// if the connect call failed
+
 
 	// addr info no longer needed
 	freeaddrinfo(result);
@@ -90,7 +111,7 @@ int monitor_connect_and_monitor() {
 		if (debug.print) printf("connect socket valid\n");
 	}
 
-	// Receive the connection handshake message
+	// Send and receive the connection handshake message
 	if (debug.print) printf("Shaking hands...\n");
 	monitor_connection_send_string("handshake:monitor");
 	int recvbuflen = DEFAULT_BUFLEN;
@@ -99,12 +120,21 @@ int monitor_connect_and_monitor() {
 	if (iResult > 0) {
 		if (debug.print) printf("Bytes received: %d\n", iResult);
 		recvbuf[iResult] = '\0';
+
+		// validate handshake
 		if (strcmp(recvbuf, "handshake:monitor") == 0) {
+			// successful handshake with server
 			if (debug.print) printf("HANDSHAKE SUCCESS:\nrecvbuf: %s\n", recvbuf);
 			if (debug.print) puts("monitoring...");
+
+			// indicate internally that report is ready
+			reportReady = 1;
+
+			// start receive data loop
 			monitor_connection_monitor();
 		}
 		else {
+			// failure to establish thread handshake...
 			if (debug.print) printf("HANDSHAKE FAIL:\nrecvbuf: %s\n", recvbuf);
 		}
 	}
@@ -118,6 +148,9 @@ int monitor_connect_and_monitor() {
 	return 0;
 }
 
+/**
+ * Send a string to the ConnectSocket
+ */
 int monitor_connection_send_string(char *sendbuf) {
 	if (debug.print) printf("Sending: %s...\n", sendbuf);
 	int iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
@@ -134,38 +167,84 @@ int monitor_connection_send_string(char *sendbuf) {
 	return 0;
 }
 
+/**
+ * Repeatedly send the message "report" to the Linux server to
+ * indicate that this Monitor process is ready to receive the next
+ * "report data" package from the server.
+ */
 int monitor_connection_monitor() {
 	int iResult;
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
+	DWORD waitResult;
 
 	do {
-		char *sendbuf = "report";
-		monitor_connection_send_string(sendbuf);
+		printf("socket wait\n");
+		waitResult = WaitForSingleObject(reportReadyMutex, INFINITE);
+		switch (waitResult) {
+			// The thread got ownership of the mutex
+			case WAIT_OBJECT_0:
+				__try {
+					printf("socket got\n");
+					if (reportReady != 0) {
+						reportReady = 0;
 
-		if (debug.print) printf("Receiving...\n");
-		// Receive a message
-		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-		if (iResult > 0) {
-			if (debug.print) printf("Bytes received: %d\n", iResult);
-			recvbuf[iResult] = '\0';
-			if (debug.print) printf("recvbuf: %s", recvbuf);
-			if (debug.console_report) printf("%s\n", recvbuf);
-			recvbuf[iResult + 1] = '\n';
-			monitor_xml_parse_report(recvbuf);
+						// send "report" signal to the ConnectSocket
+						char *sendbuf = "report";
+						monitor_connection_send_string(sendbuf);
+
+
+						// Receive the "report data" and parse it
+						if (debug.print) printf("Receiving...\n");
+						iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+						if (iResult > 0) {
+							if (debug.print) printf("Bytes received: %d\n", iResult);
+
+							// null terminate the buffer
+							recvbuf[iResult] = '\0';
+							if (debug.print) printf("recvbuf: %s", recvbuf);
+							if (debug.console_report) printf("%s\n", recvbuf);
+
+							// add an endline character
+							recvbuf[iResult + 1] = '\n';
+
+							// parse the report
+							monitor_xml_parse_report(recvbuf);
+
+							Sleep(100);
+						}
+						else if (iResult == 0) {
+							if (debug.print) printf("Connection closed\n");
+						}
+						else {
+							if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
+						}
+					}
+				}
+				__finally {
+					printf("socket release\n");
+					// Release ownership of the mutex object
+					if (!ReleaseMutex(reportReadyMutex)) {
+						printf("mutex error1:%d\n", GetLastError());
+						// Handle error.
+					}
+				}
+				break;
+
+			// The thread got ownership of an abandoned mutex
+			case WAIT_ABANDONED:
+				return FALSE;
 		}
-		else if (iResult == 0) {
-			if (debug.print) printf("Connection closed\n");
-		}
-		else {
-			if (debug.print) printf("recv failed: %d\n", WSAGetLastError());
-		}
+
 	} while (iResult > 0);
 
 	return iResult;
 }
 
-
+/**
+ * Shutdown the connection by closing the ConnectSocket and 
+ * cleaning up Winsock elements.
+ */
 int monitor_connection_shutdown() {
 	int iResult;
 

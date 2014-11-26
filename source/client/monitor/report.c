@@ -102,7 +102,7 @@ int monitor_xml_write_message(int socket, char *message) {
 	* for demonstration purposes.
 	*/
 	xmlDocDumpFormatMemory(doc, &xmlbuff, &buffersize, 1);
-	printf("wrote to socket:\n%s", (char *)xmlbuff);
+	if (debug.print) printf("wrote to socket:\n%s", (char *)xmlbuff);
 
 	/*
 	* Free associated memory.
@@ -236,7 +236,8 @@ void monitor_xml_parse_producer(xmlNode * a_node) {
 
 void monitor_xml_parse_consumers(xmlNode * a_node) {
 	if (a_node == NULL) {
-		message_buffer_set(0, "No consumers.");
+		memset(consumer_report, '\0', sizeof(consumer_report));
+		strcat_s(consumer_report, sizeof(consumer_report), "No consumers.");
 	}
 	else {
 		memset(consumer_report, '\0', sizeof(consumer_report));
@@ -247,12 +248,12 @@ void monitor_xml_parse_consumers(xmlNode * a_node) {
 				strcat_s(consumer_report, sizeof(consumer_report), consumer_line);
 			}
 		}
-		message_buffer_set(0, consumer_report);
 	}
 }
 void monitor_xml_parse_buffer(xmlNode * a_node) {
 	if (a_node == NULL) {
-		message_buffer_set(1, "No resources.");
+		memset(buffer_report, '\0', sizeof(buffer_report));
+		strcat_s(buffer_report, sizeof(buffer_report), "No resources.");
 	}
 	else {
 		memset(buffer_report, '\0', sizeof(buffer_report));
@@ -263,14 +264,13 @@ void monitor_xml_parse_buffer(xmlNode * a_node) {
 				strcat_s(buffer_report, sizeof(buffer_report), resource_line);
 			}
 		}
-		message_buffer_set(1, buffer_report);
-
 	}
 
 }
 void monitor_xml_parse_producers(xmlNode * a_node) {
 	if (a_node == NULL) {
-		message_buffer_set(2, "No producers.");
+		memset(producer_report, '\0', sizeof(producer_report));
+		strcat_s(producer_report, sizeof(producer_report), "No producers.");
 	}
 	else {
 		memset(producer_report, '\0', sizeof(producer_report));
@@ -281,8 +281,6 @@ void monitor_xml_parse_producers(xmlNode * a_node) {
 				strcat_s(producer_report, sizeof(producer_report), producer_line);
 			}
 		}
-		message_buffer_set(2, producer_report);
-
 	}
 }
 
@@ -333,7 +331,13 @@ int monitor_xml_parse_report(char *message) {
 	/*Get the root element node */
 	root_element = xmlDocGetRootElement(doc);
 
+
+
+	// parse the XML into char arrays
 	monitor_xml_parse_report_recursive(root_element);
+
+	// update the view panes
+	viewport_update_panes(consumer_report, buffer_report, producer_report);
 
 	/*free the document */
 	xmlFreeDoc(doc);

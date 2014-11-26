@@ -1,3 +1,12 @@
+/**
+ * File:   monitorService.c
+ * Author: Trevor Simonton
+ * 
+ * The MonitorService is a struct that tracks data that is used by 
+ * individual Monitor-handling threads. Communication with Monitors
+ * is handled with XML, generated and parsed with libxml2.
+ */
+
 #include "server.h"
 #include <libxml/parser.h>
 
@@ -7,7 +16,10 @@ void *monitor_service_connection_handler(void *);
 void monitor_service_write_report(MonitorService *);
 
 /**
- * Create a new ConsumerService struct, and begin the corresponding thread.
+ * Create a new MonitorService struct, and begin the corresponding thread.
+ * This new struct is added to the global linked list of MonitorService
+ * structs.  This is a doubly-linked list with a tail. The list helps us
+ * track any existing monitor connections.
  */
 int monitor_service_new(Environment *env, int client_sock) {
     MonitorService *t = malloc(sizeof(*t));
@@ -27,9 +39,17 @@ int monitor_service_new(Environment *env, int client_sock) {
     return 0;
 }
 
+/**
+ * Remove a MonitorService from the global linked list of MonitorService
+ * structs. This should be called when a Monitor disconnects
+ */
 int monitor_service_remove(MonitorService *ms) {
 
+    // acquire list mutex
     pthread_mutex_lock(&monitorListMutex);
+
+
+    // CRITICAL SECTION-------------------------------------------
 
     // remove from linked list
     if (monitorList->count == 0) {
@@ -78,36 +98,69 @@ int monitor_service_remove(MonitorService *ms) {
     free(ms);
     if (debug.print) printf("monitor struct freed from memory\n");
 
+
+    // END CRITICAL SECTION---------------------------------------
+
+
+    // release list mutex
     pthread_mutex_unlock(&monitorListMutex);
 
 }
 
+/**
+ * This will push "report data" out to all connected Monitor clients and 
+ * immediately exit the calling thread. This is called by threads created
+ * in monitor_push_reports(), which allows "report data" to be pushed
+ * in separate thread from the thread that calls monitor_push_reports().
+ * This avoids deadlock when Producers or ConsumerServices call to push
+ * "report data."
+ */
 void *monitor_push_reports_handler(void *tp) {
     if (debug.print) printf("push reports\n");
+
+    // acquire list mutex
+    pthread_mutex_lock(&monitorListMutex);
+
     if (monitorList->count == 0) {
         // no monitors
         if (debug.print) printf("no monitors\n");
     }
     else {
+        // iterate over all MonitorService instances
         MonitorService *ms = monitorList->head;
         while (ms != NULL) {
             if (debug.print) printf("lock for push\n");
+            
+            // acquire individual MonitorService ready flag mutex
             pthread_mutex_lock(&(ms->monitorReadyMutex));
-            if (ms->ready == 1) {
-            } else {
-                // wait until the monitor is ready
+            if (ms->ready != 1) {
+                // wait until the individual monitor is ready
                 if (debug.print) printf("wait for monitor\n");
                 pthread_cond_wait(&(ms->monitorNowReady), &(ms->monitorReadyMutex));
             }
+
+            // mark the monitor as not ready, and send report data
             ms->ready = 0;
             monitor_service_write_report(ms);
+
+            // release MonitorService ready flag mutex
             pthread_mutex_unlock(&(ms->monitorReadyMutex));
+
             ms = ms->next;
         }
     }
+
+    // release list mutex
+    pthread_mutex_unlock(&monitorListMutex);
+
     pthread_exit(NULL);
 }
 
+/**
+ * Push report XML data out to listening Monitor processes.
+ * This is done with a new thread so calling Producer or ConsumerService
+ * threads are not stopped.
+ */
 void monitor_push_reports() {
     pthread_t thread_id;
     if( pthread_create(&thread_id, NULL, monitor_push_reports_handler, NULL) < 0) {
@@ -115,17 +168,21 @@ void monitor_push_reports() {
         return;
     }
     if (debug.print) puts("pushing report with thread");
-    return;
 }
 
 /**
  * This will notify the client that the connection is established 
- * between the client process and the server thread.
+ * between the client process and the MonitorService thread. Note that 
+ * access to the global monitorList is protected by mutex in this function.
  */
 void *monitor_service_connection_handler(void *tp) {
     char *message;
     MonitorService *t = (MonitorService *)tp;
+
+    // acquire monitorListMutex
     pthread_mutex_lock(&monitorListMutex);
+
+    // CRITICAL SECTION-------------------------------------------
 
     // add to linked list
     if (monitorList->count == 0) {
@@ -142,6 +199,9 @@ void *monitor_service_connection_handler(void *tp) {
         if (debug.print) printf("MS-%d added to list (%d)\n", t->id, monitorList->count);
     }
 
+    // END CRITICAL SECTION---------------------------------------
+
+    // release monitorListMutex
     pthread_mutex_unlock(&monitorListMutex);
 
      
@@ -149,6 +209,9 @@ void *monitor_service_connection_handler(void *tp) {
     if (debug.print) printf("Write to sock %d\n",t->client_sock);
     message = "handshake:monitor";
     write(t->client_sock , message , strlen(message));
+
+    // push reports now we have a new Monitor
+    monitor_push_reports();
 
     // wait for client messages
     while(monitor_service_await_and_handle_message(t) == 0) {
@@ -168,7 +231,6 @@ void *monitor_service_connection_handler(void *tp) {
  * an individual client thread.
  */
 int monitor_service_await_and_handle_message(MonitorService *t) {
-    char *message;
     int recvSize;
     char recvBuff[1025];
 
@@ -192,34 +254,50 @@ int monitor_service_await_and_handle_message(MonitorService *t) {
     else {
         // Valid message from client
         if (debug.print) printf("Message from client: %s\n",recvBuff);
+
         // limit recvBuff size to 6, to eliminate duplicate "reportreport" commands
+        // TODO: why do some messages come through duplicated? (need message framing...)
         strncpy(recvBuff, recvBuff, 5);
         recvBuff[6] = '\0';
         if (debug.print) printf("Message from client clean: %s\n",recvBuff);
+
+        // report message from client
         if( strcmp(recvBuff,"report") == 0 ) {
-            message = "report data";
+            // message indicates that the monitor is ready to receive report
             if (debug.print) printf("lock ready mutex\n");
-            // message indicates that the monitor is ready to receive
+
+            // acquire this MonitorService ready flag mutex
             pthread_mutex_lock(&(t->monitorReadyMutex));
+
+            // CRITICAL SECTION-------------------------------------------
             if (t->ready == 0) {
+                // signal other threads this MonitorService is ready to send data
                 pthread_cond_signal(&(t->monitorNowReady));
             }
             t->ready = 1;
-            pthread_mutex_unlock(&(t->monitorReadyMutex));                
+            // END CRITICAL SECTION---------------------------------------
+
+            // release this MonitorService ready flag mutex
+            pthread_mutex_unlock(&(t->monitorReadyMutex));
             if (debug.print) printf("unlock, now ready\n");
-            monitor_push_reports();
-            sleep(monitorPullDelay);
+
+            // regular interval push reports call
+            //monitor_push_reports();
         }
         else {
-            message = "unrecognized client command.";
+            if (debug.print) printf("unrecognized client command.\n");
         }
-        if (debug.print) printf("Message back from monitor client:\n%s\n", message);
-        // monitor_service_write_report(t);
-        sleep(monitorPullDelay);
+
+        // sets interval for regular push/pull call
+        //sleep(1);
     }
     return 0;
 }
 
+/**
+ * Send report Data in XML to the client socket that is stored
+ * in the given MonitorService object.
+ */
 void monitor_service_write_report(MonitorService *ms) {
     xmlNodePtr root_node, consumers_node, producers_node;
     xmlNodePtr buffer_node, events_node;

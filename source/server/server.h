@@ -2,7 +2,9 @@
  * File:   server.h
  * Author: Trevor Simonton
  *
- * Created on November 17, 2014, 5:04 PM
+ * This head contains struct and function declarations
+ * for the Linux server process.
+ * 
  */
 
 #include <stdio.h>
@@ -10,13 +12,16 @@
 #include <pthread.h>
 #include <string.h>
 
+#define APPLICATION_PORT 60118
 #define MAX_PRODUCERS 128
 
+// behavioral settings
 int consumeDelay;
 int produceDelay;
 int monitorPullDelay;
 
-// Resource
+
+// Resource data
 typedef struct _Resource Resource;
 struct _Resource {
     int id;
@@ -27,7 +32,8 @@ struct _Resource {
 Resource *resource_new(int);
 int ridx;
 
-// ResourceBuffer
+
+// ResourceBuffer linked list structure
 typedef struct _ResourceBuffer ResourceBuffer;
 struct _ResourceBuffer {
     int size;
@@ -38,10 +44,10 @@ ResourceBuffer *resource_buffer_new(int);
 void resource_buffer_test(ResourceBuffer*);
 void resource_buffer_print(ResourceBuffer*);
 int initialize_producers(ResourceBuffer*, int);
-
-// bufferMutex
 pthread_mutex_t bufferMutex;
 pthread_cond_t bufferHasRoom;
+pthread_cond_t bufferNotEmpty;
+
 
 // Producer
 typedef struct _Producer Producer;
@@ -52,30 +58,23 @@ struct _Producer {
     ResourceBuffer *bufferp;
     int status;
 };
+/**
+ * producers helps us track all of our Producer instances
+ */ 
 Producer *producers[MAX_PRODUCERS];
 int pidx;
 Producer *producer_new(ResourceBuffer*);
 
-// Primary server function
+
+// Environmental variables for various thread arguments
 typedef struct _environment Environment;
 struct _environment {
     int socket_desc;
     ResourceBuffer *bufferp;
 };
 
-int consumer_service_new(Environment *, int);
 
-int report_status(void);
-int server_listen(Environment*);
-int server_close_connection(void);
-
-
-struct {
-    unsigned int print : 1;
-} debug;
-
-
-// helper struct for individual consumer service threads
+// ConsumerService thread data
 typedef struct _ConsumerService ConsumerService;
 struct _ConsumerService {
     int id;
@@ -87,6 +86,7 @@ struct _ConsumerService {
     ConsumerService *next;
     ConsumerService *prev;
 };
+// ConsumerService linked list
 typedef struct _ConsumerServiceList ConsumerServiceList;
 struct _ConsumerServiceList {
     ConsumerService *head;
@@ -94,16 +94,18 @@ struct _ConsumerServiceList {
     int count;
     int idx;
 };
+/**
+ * consumerList helps us track any live consumer connections.
+ * This is accessed from multiples threads, and is protected by mutex.
+ */ 
 ConsumerServiceList *consumerList;
 int consumer_service_new(Environment *, int client_socket);
 int consumer_service_remove(ConsumerService *);
 int consumer_service_get_resource(Environment *, Resource **);
-
-// consumerListMutext
 pthread_mutex_t consumerListMutex;
 
 
-// helper struct for individual consumer service threads
+// MonitorService thread data
 typedef struct _MonitorService MonitorService;
 struct _MonitorService {
     Environment* env;
@@ -116,6 +118,7 @@ struct _MonitorService {
     MonitorService *next;
     MonitorService *prev;
 };
+// MonitorService linked list
 typedef struct _MonitorServiceList MonitorServiceList;
 struct _MonitorServiceList {
     MonitorService *head;
@@ -125,11 +128,16 @@ struct _MonitorServiceList {
 };
 int monitor_service_new(Environment *, int);
 int monitor_service_remove(MonitorService *);
+/**
+ * monitorList helps us track any live monitor connections.
+ * This is accessed from multiples threads, and is protected by mutex.
+ */ 
 MonitorServiceList *monitorList;
 void monitor_push_reports();
-
-// monitorListMutex
 pthread_mutex_t monitorListMutex;
 
 
-int xml_write_message(int, char *);
+// global debugger flag
+struct {
+    unsigned int print : 1;
+} debug;

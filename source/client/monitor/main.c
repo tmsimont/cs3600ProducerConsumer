@@ -12,8 +12,12 @@ void monitor_shutdown();
  * @see: http://msdn.microsoft.com/en-us/library/windows/desktop/ms682512(v=vs.85).aspx
  */
 int main(int argc, char *argv[]) {
-	debug.print = 1;
-	debug.console_report = 1;
+	debug.print = 0;
+	debug.console_report = 0;
+
+	reportReady = 0;
+	reportReadyMutex = CreateMutex( NULL, FALSE, NULL);
+
 	gtk_init(&argc, &argv);
 	start_ui();	
 	monitor_shutdown();

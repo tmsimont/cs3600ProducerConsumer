@@ -1,18 +1,31 @@
+/**
+ * File: socket.c
+ * Author: Trevor Simonton
+ * 
+ * This socket.c file handles the Winsock connection for the Consumer process
+ * with the Linux server.
+ *
+ * This code was derived from examples posted on microsoft.com
+ * @see: http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
+ */
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "consumer.h"
 
+// Winsock
 #pragma comment(lib, "Ws2_32.lib")
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
 
+// default length for communication char buffers
 #define DEFAULT_BUFLEN 512
 
+// stubs for communication funcions
 int consumer_connection_send_string(char *);
 int consumer_connection_consume();
 
 /**
- * http://msdn.microsoft.com/en-us/library/windows/desktop/bb530750(v=vs.85).aspx
+ * 
  */
 int consumer_connect_and_consume() {
 	int iResult;

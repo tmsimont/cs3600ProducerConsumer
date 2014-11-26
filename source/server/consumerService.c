@@ -1,18 +1,30 @@
+/**
+ * File:   consumerService.c
+ * Author: Trevor Simonton
+ * 
+ * The ConsumerService is a struct that tracks data that is used by 
+ * individual Consumer-handling threads.
+ */
+
 #include "server.h"
 
+enum { SLEEPING, HUNGRY, CONSUMING };
 
 int consumer_service_await_and_handle_message(ConsumerService*);
 void *consumer_service_connection_handler(void *);
 
 /**
  * Create a new ConsumerService struct, and begin the corresponding thread.
+ * This new struct is added to the global linked list of ConsumerService
+ * structs.  This is a doubly-linked list with a tail. The list helps us
+ * track any existing consumer connections.
  */
 int consumer_service_new(Environment *env, int client_sock) {
     ConsumerService *cs = malloc(sizeof(*cs));
     cs->client_sock = client_sock;
     cs->env = env;
     cs->id = consumerList->idx++;
-    cs->status = 0;
+    cs->status = SLEEPING;
     cs->resources_consumed = 0;
     if (debug.print) printf("consumer service struct ready\n");
 
@@ -21,14 +33,25 @@ int consumer_service_new(Environment *env, int client_sock) {
         free(cs);
         return -1;
     }
+    
+    // notify of new consumer
+    monitor_push_reports();
 
     if (debug.print) puts("consumer service handler assigned");
     return 0;
 }
 
+/**
+ * Remove a ConsumerService from the global linked list of ConsumerService
+ * structs. This should be called when a Consumer disconnects
+ */
 int consumer_service_remove(ConsumerService *cs) {
 
+    // acquire list mutex
     pthread_mutex_lock(&consumerListMutex);
+
+
+    // CRITICAL SECTION-------------------------------------------
 
     // remove from linked list
     if (consumerList->count == 0) {
@@ -73,10 +96,14 @@ int consumer_service_remove(ConsumerService *cs) {
             }
         }
     }
-    
     free(cs);
     if (debug.print) printf("consumer struct freed from memory\n");
 
+
+    // END CRITICAL SECTION---------------------------------------
+
+
+    // release list mutex
     pthread_mutex_unlock(&consumerListMutex);
 
     
@@ -88,32 +115,56 @@ int consumer_service_remove(ConsumerService *cs) {
  */
 int consumer_service_get_resource(Environment *env, Resource **r) {
     int dequeued = 0;
+    
+    // acquire bufferMutex
     if (debug.print) printf("consumer attempting buffer mutex\n");
     pthread_mutex_lock(&bufferMutex);
     if (debug.print) printf("consumer has buffer mutex\n");
 
+    // CRITICAL SECTION-------------------------------------------
+
     // buffer is full
     if (debug.print) printf("checking env->bufferp->count\n");
     if (env->bufferp->count == env->bufferp->size) {
+        // signal producers that we are making room in the buffer
         pthread_cond_signal(&bufferHasRoom);
     }
+    if (env->bufferp->count == 0) {
+        // make sure producers know there is room in the buffer
+        pthread_cond_signal(&bufferHasRoom);
+        
+        // let monitors know about the condition
+        monitor_push_reports();
+
+        // wait until there are resources
+        pthread_cond_wait(&bufferNotEmpty, &bufferMutex);
+    }
+
     // dequeue resource from buffer
     if (debug.print) printf("calling dequeue\n");
     dequeued = resource_buffer_dequeue(env->bufferp, r);
 
+    // END CRITICAL SECTION---------------------------------------
+    
+    // release bufferMutex
     pthread_mutex_unlock(&bufferMutex);
+
     return dequeued;
 }
 
 /**
  * This will notify the client that the connection is established 
- * between the client process and the server thread.
+ * between the client process and the server thread. Note that 
+ * access to the global consumerList is protected by mutex in this function.
  */
 void *consumer_service_connection_handler(void *tp) {
     char *message;
     ConsumerService *cs = (ConsumerService *)tp;
-     
+    
+    // acquire consumerListMutex
     pthread_mutex_lock(&consumerListMutex);
+
+    // CRITICAL SECTION-------------------------------------------
 
     // add to linked list
     if (consumerList->count == 0) {
@@ -130,6 +181,9 @@ void *consumer_service_connection_handler(void *tp) {
         if (debug.print) printf("CS-%d added to list (%d)\n", cs->id, consumerList->count);
     }
 
+    // END CRITICAL SECTION---------------------------------------
+
+    // release consumerListMutex
     pthread_mutex_unlock(&consumerListMutex);
 
     // Notify client that a thread has taken the connection
@@ -142,6 +196,11 @@ void *consumer_service_connection_handler(void *tp) {
        ;
     }
 
+    // remove service from global list when connection fails
+    consumer_service_remove(cs);
+
+    pthread_exit(NULL);
+
     return NULL;
 }
 
@@ -150,11 +209,11 @@ void *consumer_service_connection_handler(void *tp) {
  * an individual client thread.
  */
 int consumer_service_await_and_handle_message(ConsumerService *t) {
-    char *message;
     int recvSize;
     char recvBuff[1025];
 
-    t->status = 0;
+    t->status = SLEEPING;
+
     // clear recvBuff
     memset(recvBuff, '\0', sizeof(recvBuff));
 
@@ -164,48 +223,64 @@ int consumer_service_await_and_handle_message(ConsumerService *t) {
     if (recvSize == 0) {
         // Client has disconnected
         if (debug.print) printf("Client disconnect\n");
-        consumer_service_remove(t);
         fflush(stdout);
-        pthread_exit(NULL);
         return -1;
     }
     else if (recvSize < 0) {
         // Error reading message
         if (debug.print) printf("ERROR reading from socket\n");
-        pthread_exit(NULL);
         return -1;
     }
     else {
         // Valid message from client
         if (debug.print) printf("Message from client: %s\n",recvBuff);
+
         // limit recvBuff size to 7, to eliminate duplicate "consumeconsume" commands
+        // TODO: why do some messages come through duplicated? (need message framing...)
         strncpy(recvBuff, recvBuff, 6);
         recvBuff[7] = '\0';
         if (debug.print) printf("Message from client cleaned: %s\n",recvBuff);
+
+        // consume message from the client
         if( strcmp(recvBuff,"consume") == 0 ) {
             if (debug.print) printf("attempting to consume.\n");
             Resource *r;
-            t->status = 1;
+            t->status = HUNGRY;
+            
+            // try to get a resource for the client
+            // NOTE: consumer_service_get_resource() will wait until resources are ready
             if (consumer_service_get_resource(t->env, &r) == 0) {
+                // construct a message for the client now that we have a resource
                 char resource_data[1024];
                 if (debug.print) printf("about to write about dequeued resource\n");
                 if (debug.print) printf("consumed r%d\n", r->id);
                 sprintf(resource_data, "rid:%d;produced_by:%d;", r->id, r->produced_by);
+
+                // send the message to the client
                 write(t->client_sock, resource_data, strlen(resource_data));
-                message = "unrecognized client command.\n";
+
+                // update this service's thread data
                 t->resources_consumed++;
-                t->status = 2;
+                t->status = CONSUMING;
+                
+                // free the resource memory
                 free(r);
+
+                // push reports out to listening monitors
                 monitor_push_reports();
+
+                // sleep for given consumer delay
                 sleep(consumeDelay);
             }
             else {
-                char resource_data[1024];
-                if (debug.print) printf("buffer underflow\n");
-                sprintf(resource_data, "empty buffer");
-                write(t->client_sock, resource_data, strlen(resource_data));
-                monitor_push_reports();
-                sleep(consumeDelay);
+                /** 
+                 * consumer_service_get_resource() should have waited until
+                 * it got a resource from the buffer, this shouldn't be a 
+                 * reachable code block.
+                 */
+                if (debug.print) printf("ERROR: no resource after wait for client.\n");
+                pthread_exit(NULL);
+                return -1;
             }
         }
         else {

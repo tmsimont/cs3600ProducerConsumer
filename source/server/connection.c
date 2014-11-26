@@ -1,5 +1,12 @@
 /**
+ * File:   connection.c
+ * Author: Trevor Simonton
  * 
+ * This is the primary connection handler for the main
+ * thread loop. 
+ * 
+ * The socket creation and thread dispatcher code in server_listen()
+ * was based on code found in an example on github:
  * @see: https://gist.github.com/silv3rm00n/5821760
  */
 
@@ -13,22 +20,27 @@
 
 int connection_handshake(Environment *, int);
 
+/**
+ * Primary server listener loop.
+ * Wait infinitely for connections to the server (until an error occurs)
+ * on the given application port.
+ */
 int server_listen(Environment *env) {
     struct sockaddr_in server;
      
-    //Create socket
+    // create the socket
     env->socket_desc = socket(AF_INET, SOCK_STREAM, 0);
     if (env->socket_desc == -1) {
         if (debug.print) puts("Could not create socket");
     }
     if (debug.print) puts("Socket created");
      
-    //Prepare the sockaddr_in structure
+    // prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons( 60118 );
+    server.sin_port = htons( APPLICATION_PORT );
      
-    //Bind
+    // bind the socket
     if(bind(env->socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0) {
         //print the error message
         perror("bind failed. Error");
@@ -36,32 +48,32 @@ int server_listen(Environment *env) {
     }
     if (debug.print) puts("bind done");
      
-    //Listen
+    // listen
     listen(env->socket_desc, 3);
     if (debug.print) puts("Waiting for incoming connections...");
 
-    //Accept incoming connection
+    // accept incoming connections forever (until error occurs)
     int client_sock;
     while((client_sock = accept(env->socket_desc, NULL, NULL))) {
         if (debug.print) printf("Connection accepted (%d)\n", client_sock);
+        // handle the connection
         connection_handshake(env, client_sock);
     }
      
-    // Identify failure to accept()
+    // identify failure to accept()
     if (client_sock < 0) {
         perror("accept failed");
         return 1;
     }
-     
+
     return 0;
 }
 
-int server_close_connection(void) {
-    return 0;
-}
 
 /**
- * Initial message from incoming connection, attempt to validate.
+ * Handle the initial message from incoming connection.
+ * This will attempt to validate the "handshake" message and respond
+ * by creating a thread of the requested connection type.
  */
 int connection_handshake(Environment *env, int client_sock) {
     char *message;

@@ -2,49 +2,61 @@
  * File:   producer.c
  * Author: Trevor Simonton
  *
- * Created on November 17, 2014, 5:06 PM
+ * The producer handles production of resources and places them into 
+ * the ResourceBuffer.
  */
 
 #include "server.h"
 
-#define MEGEXTRA (1024*1024)
+enum { SLEEPING, PRODUCING, WAITING };
 
-// pthread attribute for stack size
-pthread_attr_t attr;
-
-int bufferSim;
-
-
-
+/**
+ * Primary producer loop.
+ * This will repeatedly acquire the bufferMutex, and then add a resource 
+ * to the buffer. If the buffer is full, the thread will wait until
+ * a ConsumerService thread signals that there is room in the buffer for new
+ * resources. This waiting is handled by pthread_cond_wait()
+ */
 void *producer_produce(void *pi) {
     Producer *p = (Producer *)pi;
-
     while(1) {
-        p->status = 1;
-
+        
+        // acquire buffer mutex
         if(debug.print) printf("producer %d acquiring bufferMutex\n", p->id);
         pthread_mutex_lock(&bufferMutex);
         if(debug.print) printf("producer %d acquired bufferMutex\n", p->id);
 
+        // CRITICAL SECTION-------------------------------------------
         // buffer is full 
         if (p->bufferp->count == p->bufferp->size) {
             if(debug.print) printf("producer %d is waiting (%d to %d)...\n", p->id, p->bufferp->count, p->bufferp->size);
+            p->status = WAITING;
             // wait until there is room in buffer
             pthread_cond_wait(&bufferHasRoom, &bufferMutex);
         }
 
+        // enqueue new resource to buffer
         if(debug.print) printf("producer %d produce to buffer\n", p->id);
-        p->status = 2;
+        p->status = PRODUCING;
         resource_buffer_enqueue(p->bufferp, resource_new(p->id));
         p->resources_produced++;
-        resource_buffer_print(p->bufferp);
-        p->status = 0;
+        if(debug.print) resource_buffer_print(p->bufferp);
+
+        // signal producers that we have resources available
+        pthread_cond_signal(&bufferNotEmpty);
+
+        // tell monitors about update
+        monitor_push_reports();
+
+        // END CRITICAL SECTION---------------------------------------
+
+        // release mutex
         pthread_mutex_unlock(&bufferMutex);
-
-        sleep(produceDelay);
-
         if(debug.print) printf("producer %d released bufferMutex\n", p->id);
-
+        
+        // wait to produce more for produceDelay seconds
+        p->status = SLEEPING;
+        sleep(produceDelay);
     }
 
     pthread_exit(NULL);
@@ -63,7 +75,7 @@ Producer *producer_new(ResourceBuffer *rb) {
     p->id = pidx;
     p->bufferp = rb;
     p->resources_produced = 0;
-    p->status = 0;
+    p->status = SLEEPING;
     producers[pidx] = p;
     pidx++;
 
@@ -74,6 +86,9 @@ Producer *producer_new(ResourceBuffer *rb) {
     return p;
 }
 
+/**
+ * Create the given number of producers. Pass them the given ResourceBuffer
+ */
 int initialize_producers(ResourceBuffer *rb, int numProducers) {
     int i;
     for (i = 0; i < numProducers; i++) {

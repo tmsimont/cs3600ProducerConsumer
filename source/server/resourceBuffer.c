@@ -1,10 +1,17 @@
 /**
- *
+ * File:   resourceBuffer.c
+ * Author: Trevor Simonton
+ * 
+ * The ResourceBuffer is a linked-list FILO queue that contains 
+ * Resource struct data objects.
  */
 
 #include "server.h"
 
-
+/**
+ * Allocate memory for a resource buffer and return a pointer to 
+ * the allocated space. Initialize the buffer.
+ */
 ResourceBuffer *resource_buffer_new(int bufferSize) {
     ResourceBuffer *rb = malloc(sizeof(*rb));
     rb->count = 0;
@@ -12,6 +19,11 @@ ResourceBuffer *resource_buffer_new(int bufferSize) {
     return rb;
 }
 
+/**
+ * Allocate memory for a resource, intialize the resource. Note that a 
+ * global increment (ridx) is used to assign unique id's to each 
+ * generated resource.
+ */
 Resource *resource_new(int i) {
     Resource *r = malloc(sizeof(*r));
     r->produced_by = i;
@@ -20,6 +32,13 @@ Resource *resource_new(int i) {
     return r;
 }
 
+/** 
+ * Add a resource to the ResourceBuffer linked list (queue).
+ * The Resource buffer is a FILO queue.
+ * Note that mutex protection should be handled by the caller.
+ * A call to any listening monitors is made when the ResourceBuffer is
+ * updated.
+ */
 int resource_buffer_enqueue(ResourceBuffer *rb, Resource *r) {
     if (rb->count == 0) {
         rb->head = r;
@@ -45,6 +64,13 @@ int resource_buffer_enqueue(ResourceBuffer *rb, Resource *r) {
     }
 }
 
+/** 
+ * Remove a resource from the ResourceBuffer linked list (queue).
+ * The Resource buffer is a FILO queue.
+ * Note that mutex protection should be handled by the caller.
+ * A call to any listening monitors is made when the ResourceBuffer is
+ * updated.
+ */
 int resource_buffer_dequeue(ResourceBuffer *rb, Resource **r) {
     if (rb->count == 0) {
         return -1;
@@ -61,13 +87,16 @@ int resource_buffer_dequeue(ResourceBuffer *rb, Resource **r) {
     }
     rb->count--;
 
-    if (debug.print) printf("about to dereference r in dequeue\n");
     if (debug.print) printf("r%d dequeued (count = %d).\n", (*r)->id, rb->count);
     
     monitor_push_reports();
     return 0;
 }
 
+/**
+ * This debugging function will print the given ResourceBuffer's contents
+ * into stdout.
+ */
 void resource_buffer_print(ResourceBuffer *rb) {
     printf("----buffer (%2d)----\n", rb->count);
     if (rb->count == 0) {
@@ -83,6 +112,10 @@ void resource_buffer_print(ResourceBuffer *rb) {
     printf("-------------------\n");
 }
 
+/**
+ * This test simply enqueues and dequeues resources to to the buffer
+ * to make sure that the buffer works properly.
+ */
 void resource_buffer_test(ResourceBuffer *rb) {
     Resource *r;
 
