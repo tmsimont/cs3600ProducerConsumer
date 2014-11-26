@@ -1,3 +1,4 @@
+<!-- Builder.ui is parsed by GTK+ to consturct the Monitor GUI elements -->
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <requires lib="gtk+" version="2.24"/>
@@ -347,7 +348,7 @@
                   <object class="GtkLabel" id="label1">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">&lt;b&gt;frame1&lt;/b&gt;</property>
+                    <property name="label" translatable="yes">&lt;b&gt;Consumers&lt;/b&gt;</property>
                     <property name="use_markup">True</property>
                   </object>
                 </child>
@@ -391,7 +392,7 @@
                   <object class="GtkLabel" id="label2">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">&lt;b&gt;frame2&lt;/b&gt;</property>
+                    <property name="label" translatable="yes">&lt;b&gt;Buffer&lt;/b&gt;</property>
                     <property name="use_markup">True</property>
                   </object>
                 </child>
@@ -435,7 +436,7 @@
                   <object class="GtkLabel" id="label3">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
-                    <property name="label" translatable="yes">&lt;b&gt;frame3&lt;/b&gt;</property>
+                    <property name="label" translatable="yes">&lt;b&gt;Producers&lt;/b&gt;</property>
                     <property name="use_markup">True</property>
                   </object>
                 </child>

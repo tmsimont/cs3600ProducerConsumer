@@ -202,7 +202,8 @@ int monitor_connection_monitor() {
 			// wait for the GUI to be updated (update occurs in separate thread)
 			// @see viewport.c::display_status_textbuffer()
 			printf("waiting for signal...\n");
-			waitResult = WaitForSingleObject(guiUpdateEvent, INFINITE);
+			// at most wait 1 second...
+			waitResult = WaitForSingleObject(guiUpdateEvent, 1000);
 			switch (waitResult) {
 				case WAIT_OBJECT_0:
 					// reset the event and continue the loop
@@ -211,7 +212,9 @@ int monitor_connection_monitor() {
 					break;
 				default:
 					printf("Wait error (%d)\n", GetLastError());
-					return 0;
+					// error.. just wait it out and try to continue
+					Sleep(1000);
+					ResetEvent(guiUpdateEvent);
 			}
 
 		}

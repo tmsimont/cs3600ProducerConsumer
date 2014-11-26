@@ -21,7 +21,7 @@ int start() {
  * Initialize program and begin listening for client requests 
  */
 int main(int argc, char** argv) {
-    debug.print = 0;
+    debug.print = 1;
 
     // set behavioral variables
     bufferSize = 3;
