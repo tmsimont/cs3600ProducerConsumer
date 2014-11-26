@@ -1,4 +1,13 @@
-// @see: http://msdn.microsoft.com/en-us/library/windows/desktop/ms682516%28v=vs.85%29.aspx
+/**
+ * File: report.c
+ * Author: Trevor Simonton
+ *
+ * This file handles XML parsing of messages received from the server.
+ * Messages are parsed with the libxml2 library.
+ * 
+ * Report-related communication with the server is handled in socket.c 
+ * by the thread created in this class.
+ */
 
 #include "monitor.h"
 #include <libxml/parser.h>
@@ -6,43 +15,24 @@
 
 DWORD WINAPI reportThread(LPVOID lpParam);
 
+// Character buffers used during XML parsing
 char consumer_report[4096];
 char buffer_report[4096];
 char producer_report[4096];
-
 char consumer_line[512];
 char resource_line[512];
 char producer_line[512];
 
+/**
+ * Initialize the XML report server communication thread
+ */
 int start_report_thread() {
-	/*
-	* this initialize the library and check potential ABI mismatches
-	* between the version it was compiled for and the actual shared
-	* library used.
-	*/
+	// initialize the XML library and check potential API mismatches
 	LIBXML_TEST_VERSION
 
-	// Allocate memory for thread data.
-	pReportData = (PReportData)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(ReportData));
+	// Create the thread to handle server socket use
+	reportThreadHandle = CreateThread(NULL, 0, reportThread, NULL, 0, &reportThreadID);
 
-	if (pReportData == NULL) {
-		// If the array allocation fails, the system is out of memory
-		// so there is no point in trying to print an error message.
-		// Just terminate execution.
-		ExitProcess(2);
-	}
-
-	// Create the thread to begin execution on its own.
-	reportThreadHandle = CreateThread(
-		NULL,                   // default security attributes
-		0,                      // use default stack size  
-		reportThread,           // thread function name
-		pReportData,            // argument to thread function 
-		0,                      // use default creation flags 
-		&reportThreadID);       // returns the thread identifier 
-
-
-	// Check the return value for success.
 	// If CreateThread fails, terminate execution. 
 	// This will automatically clean up threads and memory. 
 	if (reportThreadHandle == NULL)	{
@@ -53,36 +43,28 @@ int start_report_thread() {
 	return 0;
 }
 
+/**
+ * Shutdown the communication thread.
+ */
 void report_shutdown() {
-
 	// Wait until all threads have terminated.
 	WaitForSingleObject(reportThreadHandle, INFINITE);
 
 	// Close all thread handles and free memory allocations.
 	CloseHandle(reportThreadHandle);
-	if (pReportData != NULL) {
-		HeapFree(GetProcessHeap(), 0, pReportData);
-		pReportData = NULL;    // Ensure address is not reused.
-	}
-
 }
 
-
+/**
+ * Thread handler, call out to the socket class.
+ */
 DWORD WINAPI reportThread(LPVOID lpParam) {
-	PReportData pReportDataArray;
-
-	// Cast the parameter to the correct data type.
-	// The pointer is known to be valid because 
-	// it was checked for NULL before the thread was created.
-	pReportDataArray = (PReportData)lpParam;
-
 	monitor_connect_and_monitor();
-
 	return 0;
 }
 
-
-
+/**
+ * Write XML to the given socket
+ */
 int monitor_xml_write_message(int socket, char *message) {
 	xmlNodePtr n;
 	xmlDocPtr doc;
@@ -114,24 +96,29 @@ int monitor_xml_write_message(int socket, char *message) {
 
 }
 
+/**
+ * The following consumer/resource/producer structs
+ * are used to assist XML parsing when XML reports are
+ * received from the Linux server.
+ */
 struct consumer {
 	xmlChar *id;
 	xmlChar *status;
 	xmlChar *resources_consumed;
 };
-
 struct resource {
 	xmlChar *id;
 	xmlChar *producer;
 };
-
 struct producer {
 	xmlChar *id;
 	xmlChar *status;
 	xmlChar *count;
 };
 
-
+/**
+ * Parse a <consumer> node into the consumer_line buffer
+ */
 void monitor_xml_parse_consumer(xmlNode * a_node) {
 	int count = 0;
 	xmlNode *cur_node = NULL;
@@ -168,6 +155,9 @@ void monitor_xml_parse_consumer(xmlNode * a_node) {
 	free(c);
 }
 
+/**
+* Parse a <resource> node into the resource_line buffer
+*/
 void monitor_xml_parse_resource(xmlNode * a_node) {
 	int count = 0;
 	xmlNode *cur_node = NULL;
@@ -199,6 +189,9 @@ void monitor_xml_parse_resource(xmlNode * a_node) {
 	free(c);
 }
 
+/**
+* Parse a <producer> node into the producer_line buffer
+*/
 void monitor_xml_parse_producer(xmlNode * a_node) {
 	xmlNode *cur_node = NULL;
 	int count = 0;
@@ -234,6 +227,9 @@ void monitor_xml_parse_producer(xmlNode * a_node) {
 	free(c);
 }
 
+/**
+* Parse a <consumers> node into the consumer_report buffer
+*/
 void monitor_xml_parse_consumers(xmlNode * a_node) {
 	if (a_node == NULL) {
 		memset(consumer_report, '\0', sizeof(consumer_report));
@@ -250,6 +246,10 @@ void monitor_xml_parse_consumers(xmlNode * a_node) {
 		}
 	}
 }
+
+/**
+* Parse a <buffer> into the buffer_report buffer
+*/
 void monitor_xml_parse_buffer(xmlNode * a_node) {
 	if (a_node == NULL) {
 		memset(buffer_report, '\0', sizeof(buffer_report));
@@ -267,6 +267,10 @@ void monitor_xml_parse_buffer(xmlNode * a_node) {
 	}
 
 }
+
+/**
+* Parse a <producers> into the producer_report buffer
+*/
 void monitor_xml_parse_producers(xmlNode * a_node) {
 	if (a_node == NULL) {
 		memset(producer_report, '\0', sizeof(producer_report));
@@ -285,12 +289,10 @@ void monitor_xml_parse_producers(xmlNode * a_node) {
 }
 
 /**
-* print_element_names:
-* @a_node: the initial xml node to consider.
-*
-* Prints the names of the all the xml elements
-* that are siblings or children of a given xml node.
-*/
+ * Traverse through an XML report until the <report> node is found.
+ * Then parse the children <consumers> <buffer> and <producers> node of 
+ * the <report> node.
+ */
 void monitor_xml_parse_report_recursive(xmlNode * a_node)
 {
 	xmlNode *cur_node = NULL;
@@ -316,22 +318,34 @@ void monitor_xml_parse_report_recursive(xmlNode * a_node)
 	}
 }
 
-
+/**
+ * Parse the report data received from the Linux server.
+ * Expeted format:
+ * <report>
+ *  <consumers>
+ *    <consumer />
+ *  </consumers>
+ *  <buffer>
+ *    <resource />
+ *  </buffer>
+ *  <producers>
+ *    <producer />
+ *  </producers>
+ * </report>
+ */
 int monitor_xml_parse_report(char *message) {
 	xmlDoc *doc = NULL;
 	xmlNode *root_element = NULL;
 
-	/*parse the file and get the DOM */
+	// parse the file and get the DOM
 	doc = xmlParseMemory(message, strlen(message));
 
 	if (doc == NULL) {
 		printf("error: could not parse file\n");
 	}
 
-	/*Get the root element node */
+	// get the root element node
 	root_element = xmlDocGetRootElement(doc);
-
-
 
 	// parse the XML into char arrays
 	monitor_xml_parse_report_recursive(root_element);
@@ -339,7 +353,7 @@ int monitor_xml_parse_report(char *message) {
 	// update the view panes
 	viewport_update_panes(consumer_report, buffer_report, producer_report);
 
-	/*free the document */
+	// free the document
 	xmlFreeDoc(doc);
 
 	/*

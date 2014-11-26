@@ -1,3 +1,10 @@
+/**
+ * File: main.c
+ * Author: Trevor Simonton
+ *
+ * This is the main Monitor process. This starts a GUI for the user to interact with, 
+ * and waits to spawn Consumer processes
+ */
 #include "monitor.h"
 
 
@@ -7,10 +14,6 @@ int procIndex = 0;
 void monitor_new_process();
 void monitor_shutdown();
 
-/**
- *
- * @see: http://msdn.microsoft.com/en-us/library/windows/desktop/ms682512(v=vs.85).aspx
- */
 int main(int argc, char *argv[]) {
 	debug.print = 0;
 	debug.console_report = 0;
@@ -23,6 +26,13 @@ int main(int argc, char *argv[]) {
 	report_shutdown();
 }
 
+/**
+ * Spawn a new Consumer process. Note that "consumer.exe" must be in the same
+ * folder as the running Monitor process.
+ *
+ * This code was built from an example on microsoft.com:
+ * @see: http://msdn.microsoft.com/en-us/library/windows/desktop/ms682512(v=vs.85).aspx
+ */
 void monitor_new_process() {
 	ZeroMemory(&si[procIndex], sizeof(si[procIndex]));
 	si[procIndex].cb = sizeof(si[procIndex]);
@@ -48,6 +58,9 @@ void monitor_new_process() {
 	procIndex++;
 }
 
+/**
+ * Wait for spawned Consumer to stop and then close the handles.
+ */
 void monitor_shutdown() {
 	while (procIndex >= 0){
 		// Wait until child process exits.
@@ -60,9 +73,10 @@ void monitor_shutdown() {
 	}
 }
 
-
-void ErrorHandler(LPTSTR lpszFunction)
-{
+/**
+ * This is an error handler provided in the above microsoft example.
+ */
+void ErrorHandler(LPTSTR lpszFunction) {
 	// Retrieve the system error message for the last-error code.
 
 	LPVOID lpMsgBuf;

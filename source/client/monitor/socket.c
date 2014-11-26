@@ -199,12 +199,13 @@ int monitor_connection_monitor() {
 			// parse the report
 			monitor_xml_parse_report(recvbuf);
 
-			// wait for the GUI to be updated
+			// wait for the GUI to be updated (update occurs in separate thread)
+			// @see viewport.c::display_status_textbuffer()
 			printf("waiting for signal...\n");
 			waitResult = WaitForSingleObject(guiUpdateEvent, INFINITE);
 			switch (waitResult) {
 				case WAIT_OBJECT_0:
-					// reset the event and reset the loop
+					// reset the event and continue the loop
 					printf("reset signal.\n");
 					ResetEvent(guiUpdateEvent);
 					break;

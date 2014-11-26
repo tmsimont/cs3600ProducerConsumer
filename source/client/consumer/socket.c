@@ -25,7 +25,10 @@ int consumer_connection_send_string(char *);
 int consumer_connection_consume();
 
 /**
- * 
+ * Initialize the connection and begin making "consume" calls
+ * Once the connection is made, this sends
+ * the "handshake:consumer" signal that initializes the server
+ * thread
  */
 int consumer_connect_and_consume() {
 	int iResult;
@@ -104,9 +107,13 @@ int consumer_connect_and_consume() {
 	}
 
 
-	// Receive the connection handshake message
+	// Send and receive the connection handshake messages
 	if (debug.print) printf("Shaking hands...\n");
+
+	// send
 	consumer_connection_send_string("handshake:consumer");
+
+	// receive
 	int recvbuflen = DEFAULT_BUFLEN;
 	char recvbuf[DEFAULT_BUFLEN];
 	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
@@ -116,6 +123,8 @@ int consumer_connect_and_consume() {
 		if (strcmp(recvbuf, "handshake:consumer") == 0) {
 			if (debug.print) printf("HANDSHAKE SUCCESS:\nrecvbuf: %s\n", recvbuf);
 			if (debug.print) puts("consuming...");
+
+			// begin conumer loop with established connection
 			while(consumer_connection_consume() > 0)
 				;
 		}
@@ -133,6 +142,9 @@ int consumer_connect_and_consume() {
 	return 0;
 }
 
+/**
+ * Send a string out to the server
+ */
 int consumer_connection_send_string(char *sendbuf) {
 	if (debug.print) printf("Sending: %s...\n", sendbuf);
 	int iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
@@ -149,6 +161,11 @@ int consumer_connection_send_string(char *sendbuf) {
 	return 0;
 }
 
+/**
+ * Send "consume" command to the server, and wait for the response.
+ * The response should be a detail about the resource that was consumed.
+ * This detail is printed with printf() to console.
+ */
 int consumer_connection_consume() {
 	int iResult;
 
@@ -177,7 +194,9 @@ int consumer_connection_consume() {
 	return iResult;
 }
 
-
+/**
+ * Disconnect and clean up memory
+ */
 int consumer_connection_shutdown() {
 	int iResult;
 

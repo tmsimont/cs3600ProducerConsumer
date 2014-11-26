@@ -11,6 +11,7 @@
 // primary report text pane text buffers
 GtkTextBuffer *buffers[3];
 
+// other GUI elements
 GtkBuilder *builder;
 GObject *window, 
 	*settingsDialog, 

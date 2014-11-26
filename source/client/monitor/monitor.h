@@ -1,10 +1,18 @@
+/**
+ * File: monitor.h
+ * Author: Trevor Simonton
+ *
+ * Header for the Monitor process.
+ * This includes thread, socket and string libraries, and
+ * declares shared functions and resources.
+ */
 #include <stdio.h>
 #include <windows.h>
 #include <tchar.h>
 #include <strsafe.h>
 #include <gtk/gtk.h>
 
-// Primary server function
+// Primary server interactions
 int monitor_connect_and_monitor();
 int monitor_connection_shutdown();
 void monitor_new_process();
@@ -15,23 +23,22 @@ DWORD   reportThreadID;
 HANDLE  reportThreadHandle;
 int start_report_thread();
 void report_shutdown();
-typedef struct _reportData ReportData, *PReportData;
-struct _reportData {
-	int foo;
-};
-PReportData pReportData;
 
-
+// Event to signal GUI update (which occurs in a separate thread)
 HANDLE guiUpdateEvent;
 
-
+// GUI 
 int start_ui();
 int viewport_update_panes(char *, char *, char *);
+
+// XML parser
 int monitor_xml_write_message(int, char *);
 int monitor_xml_parse_report(char *);
 
+// Microsoft error handler
 void ErrorHandler(LPTSTR);
 
+// Debugging flags
 struct {
 	unsigned int print : 1;
 	unsigned int console_report : 1;

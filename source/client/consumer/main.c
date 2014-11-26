@@ -1,3 +1,15 @@
+/**
+ * File: main.c
+ * Author: Trevor Simonton
+ *
+ * This is the simple Consumer process main function. This will
+ * start a connection with the Linux server and continually ask 
+ * to consume resources.
+ * 
+ * Resources received from the server are printed to the console
+ * window with printf()
+ *
+ */
 #include "consumer.h"
 
 int main() {
