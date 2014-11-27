@@ -1,10 +1,11 @@
 /**
- * File: main.c
+ * @file
  * Author: Trevor Simonton
  *
  * This is the main Monitor process. This starts a GUI for the user to interact with, 
  * and waits to spawn Consumer processes
  */
+
 #include "monitor.h"
 
 

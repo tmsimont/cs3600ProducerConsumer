@@ -1,5 +1,5 @@
 /**
- * File: monitor.h
+ * @file
  * Author: Trevor Simonton
  *
  * Header for the Monitor process.

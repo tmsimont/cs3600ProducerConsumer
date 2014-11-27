@@ -1,5 +1,5 @@
 /**
- * File:   resourceBuffer.c
+ * @file
  * Author: Trevor Simonton
  * 
  * The ResourceBuffer is a linked-list FILO queue that contains 

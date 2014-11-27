@@ -1,5 +1,5 @@
 /**
- * File: socket.c
+ * @file
  * Author: Trevor Simonton
  * 
  * The socket.c file provides Winsock2 integration for the 

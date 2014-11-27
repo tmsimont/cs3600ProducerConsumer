@@ -1,5 +1,5 @@
 /**
- * File: main.c
+ * @file
  * Author: Trevor Simonton
  *
  * This is the simple Consumer process main function. This will

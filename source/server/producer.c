@@ -1,5 +1,5 @@
-/* 
- * File:   producer.c
+/** 
+ * @file
  * Author: Trevor Simonton
  *
  * The producer handles production of resources and places them into 

@@ -1,5 +1,5 @@
 /**
- * File: viewport.c
+ * @file
  * Author: Trevor Simonton
  *
  * The viewport.c file implements the GTK+ library

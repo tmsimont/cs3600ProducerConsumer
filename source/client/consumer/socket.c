@@ -1,5 +1,5 @@
 /**
- * File: socket.c
+ * @file
  * Author: Trevor Simonton
  * 
  * This socket.c file handles the Winsock connection for the Consumer process

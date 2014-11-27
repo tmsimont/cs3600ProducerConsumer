@@ -1,5 +1,5 @@
 /**
- * File:   consumerService.c
+ * @file
  * Author: Trevor Simonton
  * 
  * The ConsumerService is a struct that tracks data that is used by 

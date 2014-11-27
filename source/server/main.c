@@ -1,6 +1,6 @@
-/* 
- * File:   main.c
- * Author: Trevor
+/**
+ * @file
+ * Author: Trevor Simonton
  *
  * The main function will simply initialize global variables
  * and begin the server_listen() process.
@@ -21,7 +21,7 @@ int start() {
  * Initialize program and begin listening for client requests 
  */
 int main(int argc, char** argv) {
-    debug.print = 1;
+    debug.print = 0;
 
     // set behavioral variables
     bufferSize = 3;
@@ -32,11 +32,6 @@ int main(int argc, char** argv) {
     producerRest = 1;
 
     // allow behavior vars to be overridden with command line args
-    printf ("args: %d\n", argc);
-    int i;
-    for (i = 0; i < argc; i++) {
-        printf ("arg: %s\n", argv[i]);
-    }
     if (argc > 1) {
         int i;
         for (i = 1; i < argc; i++) {

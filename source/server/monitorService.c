@@ -1,5 +1,5 @@
 /**
- * File:   monitorService.c
+ * @file
  * Author: Trevor Simonton
  * 
  * The MonitorService is a struct that tracks data that is used by 

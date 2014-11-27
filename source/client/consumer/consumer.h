@@ -1,5 +1,5 @@
-/*
- * File: consumer.h
+/**
+ * @file
  * Author : Trevor Simonton
  *
  * Define simple function stubs for the Consumer process

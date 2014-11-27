@@ -1,5 +1,5 @@
 /**
- * File:   connection.c
+ * @file
  * Author: Trevor Simonton
  * 
  * This is the primary connection handler for the main

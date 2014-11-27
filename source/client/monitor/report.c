@@ -1,5 +1,5 @@
 /**
- * File: report.c
+ * @file
  * Author: Trevor Simonton
  *
  * This file handles XML parsing of messages received from the server.

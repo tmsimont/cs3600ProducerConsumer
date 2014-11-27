@@ -1,5 +1,5 @@
-/* 
- * File:   server.h
+/**
+ * @file
  * Author: Trevor Simonton
  *
  * This head contains struct and function declarations
