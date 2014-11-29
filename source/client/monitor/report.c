@@ -54,6 +54,10 @@ int start_report_thread() {
  * Shutdown the communication thread.
  */
 void report_shutdown() {
+
+	// Free the memory allocated by the parser.
+	xmlCleanupParser();
+
 	// Wait until all threads have terminated.
 	WaitForSingleObject(reportThreadHandle, INFINITE);
 
@@ -362,12 +366,6 @@ int monitor_xml_parse_report(char *message) {
 
 	// free the document
 	xmlFreeDoc(doc);
-
-	/*
-	*Free the global variables that may
-	*have been allocated by the parser.
-	*/
-	xmlCleanupParser();
 
 	return 0;
 }
