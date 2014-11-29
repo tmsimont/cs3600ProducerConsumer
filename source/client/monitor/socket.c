@@ -19,9 +19,6 @@
 WSADATA wsaData;
 SOCKET ConnectSocket = INVALID_SOCKET;
 
-// default length for communication char buffers
-#define DEFAULT_BUFLEN 16384
-
 // stubs for communication functions
 int monitor_connection_monitor();
 
@@ -113,8 +110,6 @@ int monitor_connect_and_monitor() {
 	// Send and receive the connection handshake message
 	if (debug.print) printf("Shaking hands...\n");
 	monitor_connection_send_string("handshake:monitor");
-	int recvbuflen = DEFAULT_BUFLEN;
-	char recvbuf[DEFAULT_BUFLEN];
 	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
 	if (iResult > 0) {
 		if (debug.print) printf("Bytes received: %d\n", iResult);
@@ -170,12 +165,13 @@ int monitor_connection_send_string(char *sendbuf) {
  */
 int monitor_connection_monitor() {
 	int iResult;
-	int recvbuflen = DEFAULT_BUFLEN;
-	char recvbuf[DEFAULT_BUFLEN];
 	DWORD waitResult;
 	guiUpdateEvent = CreateEvent(NULL, TRUE, FALSE, TEXT("guiUpdateEvent"));
 
 	do {
+		// reset receive buffer
+		memset(recvbuf, '\0', sizeof(recvbuf));
+
 		// send "report" signal to the ConnectSocket
 		char *sendbuf = "report";
 		monitor_connection_send_string(sendbuf);

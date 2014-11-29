@@ -24,6 +24,11 @@ HANDLE  reportThreadHandle;
 int start_report_thread();
 void report_shutdown();
 
+// default length for communication char buffers
+#define DEFAULT_BUFLEN 16384
+int recvbuflen;
+char recvbuf[DEFAULT_BUFLEN];
+
 // Event to signal GUI update (which occurs in a separate thread)
 HANDLE guiUpdateEvent;
 

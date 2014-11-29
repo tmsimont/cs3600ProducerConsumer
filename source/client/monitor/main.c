@@ -18,6 +18,8 @@ void monitor_shutdown();
 int main(int argc, char *argv[]) {
 	debug.print = 0;
 	debug.console_report = 0;
+	recvbuflen = DEFAULT_BUFLEN;
+	memset(recvbuf, '\0', sizeof(recvbuf));
 
 	gtk_init(&argc, &argv);
 	start_ui();	
