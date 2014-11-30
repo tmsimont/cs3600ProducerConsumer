@@ -224,6 +224,7 @@ void *monitor_push_reports_handler(void *tp) {
             // prevent creation of erroneous threads
             if (ms->has_queued_send) {
                 pthread_mutex_unlock(&(ms->hasQueuedSendMutex));
+                ms = ms->next;
                 continue;
             }
             else {
