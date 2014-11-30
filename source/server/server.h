@@ -121,6 +121,8 @@ struct _MonitorService {
     int id;
     int deleted;
     int waiting;
+    int has_queued_send : 1;
+    pthread_mutex_t hasQueuedSendMutex;
     pthread_mutex_t monitorReadyMutex;
     pthread_cond_t monitorNowReady;
     pthread_t thread;

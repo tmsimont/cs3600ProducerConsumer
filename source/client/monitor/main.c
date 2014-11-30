@@ -8,9 +8,11 @@
 
 #include "monitor.h"
 
+#define MAX_CHILD_PROCCESS 128
 
-STARTUPINFO si[5];
-PROCESS_INFORMATION pi[5];
+STARTUPINFO si[MAX_CHILD_PROCCESS];
+PROCESS_INFORMATION pi[MAX_CHILD_PROCCESS];
+
 int procIndex = 0;
 void monitor_new_process();
 void monitor_shutdown();
@@ -18,8 +20,6 @@ void monitor_shutdown();
 int main(int argc, char *argv[]) {
 	debug.print = 0;
 	debug.console_report = 0;
-	recvbuflen = DEFAULT_BUFLEN;
-	memset(recvbuf, '\0', sizeof(recvbuf));
 
 	gtk_init(&argc, &argv);
 	start_ui();	

@@ -18,19 +18,9 @@ int monitor_connection_shutdown();
 void monitor_new_process();
 int monitor_connection_send_string(char *);
 
-// Report thread
-DWORD   reportThreadID;
-HANDLE  reportThreadHandle;
+// Report functions
 int start_report_thread();
 void report_shutdown();
-
-// default length for communication char buffers
-#define DEFAULT_BUFLEN 16384
-int recvbuflen;
-char recvbuf[DEFAULT_BUFLEN];
-
-// Event to signal GUI update (which occurs in a separate thread)
-HANDLE guiUpdateEvent;
 
 // GUI 
 int start_ui();

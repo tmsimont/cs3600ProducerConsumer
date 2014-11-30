@@ -15,7 +15,8 @@ GtkTextBuffer *buffers[3];
 GtkBuilder *builder;
 GObject *window, 
 	*settingsDialog, 
-	*settingsMenuItem;
+	*settingsMenuItem,
+	*spawnConsumer;
 GtkWidget *console1, *console2, *console3;
 GtkWidget *hbox1;
 
@@ -63,8 +64,8 @@ int start_ui() {
 	settingsMenuItem = gtk_builder_get_object(builder, "connectToServer");
 	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_connect_to_server), NULL);
 
-	settingsMenuItem = gtk_builder_get_object(builder, "startConsumer");
-	g_signal_connect(settingsMenuItem, "activate", G_CALLBACK(ui_add_consumer_process), NULL);
+	spawnConsumer = gtk_builder_get_object(builder, "startConsumer");
+	g_signal_connect(spawnConsumer, "activate", G_CALLBACK(ui_add_consumer_process), NULL);
 
 	gtk_main();
 
@@ -87,6 +88,7 @@ struct DispatchData {
 };
 struct DispatchData *data;
 static gboolean display_status_textbuffer(struct DispatchData *data) {
+	extern HANDLE guiUpdateEvent;
 	gtk_text_buffer_set_text(data->buffer0, data->output_str_c, strlen(data->output_str_c));
 	gtk_text_buffer_set_text(data->buffer1, data->output_str_b, strlen(data->output_str_b));
 	gtk_text_buffer_set_text(data->buffer2, data->output_str_p, strlen(data->output_str_p));

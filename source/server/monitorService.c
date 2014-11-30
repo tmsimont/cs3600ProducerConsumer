@@ -14,6 +14,7 @@
 int monitor_service_await_and_handle_message(MonitorService*);
 void *monitor_service_connection_handler(void *);
 void monitor_service_write_report(MonitorService *);
+void monitor_mark_no_longer_queued_send(MonitorService *);
 
 /**
  * Create a new MonitorService struct, and begin the corresponding thread.
@@ -28,6 +29,8 @@ int monitor_service_new(Environment *env, int client_sock) {
     t->ready = 0;
     t->deleted = 0;
     t->waiting = 0;
+    t->has_queued_send = 0;
+    pthread_mutex_init(&(t->hasQueuedSendMutex), NULL);
     t->id = monitorList->idx++;
     pthread_mutex_init(&(t->monitorReadyMutex), NULL);
     pthread_cond_init(&(t->monitorNowReady), NULL);
@@ -210,7 +213,23 @@ void *monitor_push_reports_handler(void *tp) {
         // iterate over all MonitorService instances
         MonitorService *ms = monitorList->head;
         while (ms != NULL) {
-            if (debug.print) printf("lock for push\n");
+
+            // before spawning another thread to send a report when the 
+            // monitor service is ready, make sure there isn't already 
+            // a thread waiting to do exactly this (no need to have numerous
+            // threads waiting to do the same thing...)
+
+            // acquire individual "has queued mutex"
+            pthread_mutex_lock(&(ms->hasQueuedSendMutex));
+            // prevent creation of erroneous threads
+            if (ms->has_queued_send) {
+                pthread_mutex_unlock(&(ms->hasQueuedSendMutex));
+                continue;
+            }
+            else {
+                ms->has_queued_send = 1;
+            }
+            pthread_mutex_unlock(&(ms->hasQueuedSendMutex));
 
             // use yet another thread so we can quickly release the monitorListMutex
             pthread_t thread_id;
@@ -348,6 +367,10 @@ int monitor_service_await_and_handle_message(MonitorService *t) {
                 // signal other threads this MonitorService is ready to send data
                 pthread_cond_signal(&(t->monitorNowReady));
             }
+
+            // lock has hasQueuedSendMutex, set to 0, unlock it
+            monitor_mark_no_longer_queued_send(t);
+
             t->ready = 1;
             // END CRITICAL SECTION---------------------------------------
 
@@ -366,6 +389,15 @@ int monitor_service_await_and_handle_message(MonitorService *t) {
         //sleep(1);
     }
     return 0;
+}
+
+/**
+ * Set the has_queued_send flag to "false" in thread-safe manner
+ */
+void monitor_mark_no_longer_queued_send(MonitorService *ms) {
+    pthread_mutex_lock(&(ms->hasQueuedSendMutex));
+    ms->has_queued_send = 0;
+    pthread_mutex_unlock(&(ms->hasQueuedSendMutex));
 }
 
 /**

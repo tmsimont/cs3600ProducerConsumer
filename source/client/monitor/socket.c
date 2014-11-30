@@ -22,6 +22,14 @@ SOCKET ConnectSocket = INVALID_SOCKET;
 // stubs for communication functions
 int monitor_connection_monitor();
 
+// Event to signal GUI update (which occurs in a separate thread)
+HANDLE guiUpdateEvent;
+
+// default length for communication char buffers
+#define DEFAULT_BUFLEN 16384
+static int recvbuflen;
+static char recvbuf[DEFAULT_BUFLEN];
+
 /**
  * This is the main function of this "class."
  * This initializes Winsock, and establishes the connection with 
@@ -35,6 +43,9 @@ int monitor_connect_and_monitor() {
 		*result = NULL,
 		*ptr = NULL,
 		hints;
+
+	recvbuflen = DEFAULT_BUFLEN;
+	memset(recvbuf, '\0', sizeof(recvbuf));
 
 	// Initialize Winsock
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);

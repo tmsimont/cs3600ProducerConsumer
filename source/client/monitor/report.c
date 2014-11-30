@@ -14,21 +14,23 @@
 #include <libxml/tree.h>
 
 // producer states
-char *producer_states[] = { "sleep", "producing", "export", "waiting" };
+static char *producer_states[] = { "sleep", "producing", "export", "waiting" };
 
 // consumer states
-char *consumer_states[] = { "sleep", "hungry", "consuming" };
+static char *consumer_states[] = { "sleep", "hungry", "consuming" };
 
-
-DWORD WINAPI reportThread(LPVOID lpParam);
+// Report thread
+static DWORD WINAPI reportThread(LPVOID lpParam);
+static DWORD   reportThreadID;
+static HANDLE  reportThreadHandle;
 
 // Character buffers used during XML parsing
-char consumer_report[4096];
-char buffer_report[4096];
-char producer_report[4096];
-char consumer_line[512];
-char resource_line[512];
-char producer_line[512];
+static char consumer_report[4096];
+static char buffer_report[4096];
+static char producer_report[4096];
+static char consumer_line[512];
+static char resource_line[512];
+static char producer_line[512];
 
 /**
  * Initialize the XML report server communication thread
@@ -37,6 +39,7 @@ int start_report_thread() {
 	// initialize the XML library and check potential API mismatches
 	LIBXML_TEST_VERSION
 
+		printf("THREAD START\n");
 	// Create the thread to handle server socket use
 	reportThreadHandle = CreateThread(NULL, 0, reportThread, NULL, 0, &reportThreadID);
 
