@@ -1,4 +1,4 @@
-# cs3600ProducerConsumer
+# pthreads!
 
 This was a class project designed to demonstrate the producer consumer problem on a multi-threaded server application.
 
